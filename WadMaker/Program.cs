@@ -1,19 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
+using WadMaker.Drawing;
 
 namespace WadMaker
 {
     class Settings
     {
-        public bool FullRebuild { get; set; }
-        public bool Extract { get; set; }
+        public bool FullRebuild { get; set; }           // -full: forces a full rebuild instead of an incremental one
+        public bool Extract { get; set; }               // -extract: extracts textures from a wad file instead of building a wad file
+        public bool ExtractMipmaps { get; set; }        // -mipmaps: also extracts mipmaps
 
         public string InputDirectory { get; set; }      // Build mode only
         public string WadPath { get; set; }             // Wad path (output in build mode, input in extract mode).
@@ -31,7 +30,7 @@ namespace WadMaker
                 var settings = ParseArguments(args);
                 if (settings.Extract)
                 {
-                    ExtractWad(settings.WadPath, settings.OutputDirectory);
+                    ExtractWad(settings.WadPath, settings.OutputDirectory, settings.ExtractMipmaps);
                 }
                 else
                 {
@@ -41,6 +40,7 @@ namespace WadMaker
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.GetType().Name}: '{ex.Message}'.");
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -57,6 +57,7 @@ namespace WadMaker
                 {
                     case "-full": settings.FullRebuild = true; break;
                     case "-extract": settings.Extract = true; break;
+                    case "-mipmaps": settings.ExtractMipmaps = true; break;
                     default: throw new ArgumentException($"Unknown argument: '{arg}'.");
                 }
             }
@@ -96,7 +97,7 @@ namespace WadMaker
         // TODO: Also extract mipmaps? (texture.mipmap1.png?)
         // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
         //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
-        static void ExtractWad(string inputWadPath, string outputDirectory)
+        static void ExtractWad(string inputWadPath, string outputDirectory, bool extractMipmaps)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -104,8 +105,21 @@ namespace WadMaker
             Directory.CreateDirectory(outputDirectory);
             foreach (var texture in wad.Textures)
             {
-                using (var image = TextureToBitmap(texture))
-                    image.Save(Path.Combine(outputDirectory, texture.Name + ".png"), ImageFormat.Png);
+                var maxMipmap = extractMipmaps ? 4 : 1;
+                for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
+                {
+                    try
+                    {
+                        using (var image = TextureToBitmap(texture, mipmap))
+                        {
+                            image.Save(Path.Combine(outputDirectory, texture.Name + $"{(mipmap > 0 ? ".mipmap" + mipmap : "")}.png"), ImageFormat.Png);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
+                    }
+                }
             }
 
             Console.WriteLine($"Extracted {wad.Textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
@@ -118,54 +132,46 @@ namespace WadMaker
         }
 
 
-        static Bitmap TextureToBitmap(Texture texture)
+        static Bitmap TextureToBitmap(Texture texture, int mipmap = 0)
         {
-            if (texture.Name.StartsWith('{'))
-                return ColorKeyedTextureToBitmap(texture);
+            var hasColorKey = texture.Name.StartsWith('{');
 
-            var buffer = new byte[texture.Width * texture.Height * 3];
-            var index = 0;
-            for (int i = 0; i < texture.ImageData.Length; i++)
+            var textureCanvas = CreateTextureCanvas(texture, mipmap);
+            var bitmapCanvas = Canvas.Create(textureCanvas.Width, textureCanvas.Height, hasColorKey ? PixelFormat.Format32bppArgb : PixelFormat.Format24bppRgb);
+            if (!hasColorKey)
             {
-                var color = texture.Palette[texture.ImageData[i]];
-                buffer[index++] = color.B;
-                buffer[index++] = color.G;
-                buffer[index++] = color.R;
+                textureCanvas.CopyTo(bitmapCanvas);
             }
-
-            var bitmap = new Bitmap(texture.Width, texture.Height, PixelFormat.Format24bppRgb);
-            var bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-            Marshal.Copy(buffer, 0, bitmapData.Scan0, buffer.Length);
-            bitmap.UnlockBits(bitmapData);
-            return bitmap;
+            else
+            {
+                for (int y = 0; y < textureCanvas.Height; y++)
+                {
+                    for (int x = 0; x < textureCanvas.Width; x++)
+                    {
+                        var colorIndex = textureCanvas.GetIndex(x, y);
+                        if (colorIndex != 255)
+                            bitmapCanvas.SetPixel(x, y, textureCanvas.Palette[colorIndex]);
+                    }
+                }
+            }
+            return bitmapCanvas.CreateBitmap();
         }
 
-        static Bitmap ColorKeyedTextureToBitmap(Texture texture)
+        static IIndexedCanvas CreateTextureCanvas(Texture texture, int mipmap = 0)
         {
-            var buffer = new byte[texture.Width * texture.Height * 4];
-            var index = 0;
-            for (int i = 0; i < texture.ImageData.Length; i++)
-            {
-                var paletteIndex = texture.ImageData[i];
-                if (paletteIndex == 255)
-                {
-                    index += 4;
-                }
-                else
-                {
-                    var color = texture.Palette[texture.ImageData[i]];
-                    buffer[index++] = color.B;
-                    buffer[index++] = color.G;
-                    buffer[index++] = color.R;
-                    buffer[index++] = 255;
-                }
-            }
+            var mipmapData = mipmap switch {
+                0 => texture.ImageData,
+                1 => texture.Mipmap1Data,
+                2 => texture.Mipmap2Data,
+                3 => texture.Mipmap3Data,
+                _ => null
+            };
 
-            var bitmap = new Bitmap(texture.Width, texture.Height, PixelFormat.Format32bppArgb);
-            var bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-            Marshal.Copy(buffer, 0, bitmapData.Scan0, buffer.Length);
-            bitmap.UnlockBits(bitmapData);
-            return bitmap;
+            if (mipmapData == null)
+                return null;
+
+            var scale = 1 << mipmap;
+            return IndexedCanvas.Create(texture.Width / scale, texture.Height / scale, PixelFormat.Format8bppIndexed, texture.Palette, mipmapData, texture.Width / scale);
         }
     }
 }
