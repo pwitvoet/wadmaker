@@ -13,8 +13,8 @@ namespace WadMaker.Drawing
             if (height < 1) throw new ArgumentException($"{nameof(height)} must be greater than 0.");
 
             var actualStride = stride ?? PixelFormatUtils.GetStride(width, pixelFormat);
-            if (actualStride < PixelFormatUtils.GetStride(width, pixelFormat)) throw new ArgumentException($"{nameof(stride)} must be greater than {PixelFormatUtils.GetStride(width, pixelFormat)}.");
-            if (buffer?.Length < stride * height) throw new ArgumentException($"{nameof(buffer)} must be at least {stride * height} bytes.");
+            if (actualStride < PixelFormatUtils.GetStride(width, pixelFormat, false)) throw new ArgumentException($"{nameof(stride)} must be greater than {PixelFormatUtils.GetStride(width, pixelFormat, false)}.");
+            if (buffer?.Length < actualStride * height) throw new ArgumentException($"{nameof(buffer)} must be at least {actualStride * height} bytes.");
             if (pixelFormat.HasFlag(PixelFormat.Indexed)) throw new NotSupportedException($"For indexed pixel formats, use {nameof(IndexedCanvas)}.{nameof(IndexedCanvas.Create)}.");
 
             if (buffer == null)

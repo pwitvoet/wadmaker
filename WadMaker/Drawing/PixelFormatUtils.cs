@@ -7,36 +7,23 @@ namespace WadMaker.Drawing
     {
         /// <summary>
         /// Returns the number of bytes that are required per row, for the given width and pixel format.
-        /// Strides are aligned to the next multiple of 4 bytes.
+        /// By default, strides are aligned to the next multiple of 4 bytes.
         /// </summary>
-        public static int GetStride(int width, PixelFormat pixelFormat)
+        public static int GetStride(int width, PixelFormat pixelFormat, bool aligned = true)
         {
-            switch (pixelFormat)
-            {
-                case PixelFormat.Format1bppIndexed:
-                    return NearestMultipleOf4((width + 7) / 8);
-
-                case PixelFormat.Format4bppIndexed:
-                    return NearestMultipleOf4((width + 1) / 2);
-
-                case PixelFormat.Format8bppIndexed:
-                    return NearestMultipleOf4(width);
-
-                case PixelFormat.Format16bppRgb555:
-                case PixelFormat.Format16bppRgb565:
-                case PixelFormat.Format16bppArgb1555:
-                    return NearestMultipleOf4(width * 2);
-
-                case PixelFormat.Format24bppRgb:
-                    return NearestMultipleOf4(width * 3);
-
-                case PixelFormat.Format32bppRgb:
-                case PixelFormat.Format32bppArgb:
-                    return width * 4;
-
-                default:
-                    throw new NotSupportedException($"Cannot determine stride for pixel format {pixelFormat}.");
-            }
+            var stride = pixelFormat switch {
+                PixelFormat.Format1bppIndexed => (width + 7) / 8,
+                PixelFormat.Format4bppIndexed => (width + 1) / 2,
+                PixelFormat.Format8bppIndexed => width,
+                PixelFormat.Format16bppRgb555 => width * 2,
+                PixelFormat.Format16bppRgb565 => width * 2,
+                PixelFormat.Format16bppArgb1555 => width * 2,
+                PixelFormat.Format24bppRgb => width * 3,
+                PixelFormat.Format32bppRgb => width * 4,
+                PixelFormat.Format32bppArgb => width * 4,
+                _ => throw new NotSupportedException($"Cannot determine stride for pixel format {pixelFormat}."),
+            };
+            return aligned ? NearestMultipleOf4(stride) : stride;
         }
 
         /// <summary>
