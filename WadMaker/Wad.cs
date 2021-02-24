@@ -110,7 +110,7 @@ namespace WadMaker
                 stream.Write(texture.Mipmap2Data);
                 stream.Write(texture.Mipmap3Data);
 
-                stream.Write((ushort)texture.ColorsUsed);
+                stream.Write((ushort)texture.Palette.Length);
                 if (texture.Type == TextureType.MipmapTexture)
                 {
                     foreach (var color in texture.Palette)
@@ -132,7 +132,7 @@ namespace WadMaker
                 }
                 stream.Write(texture.ImageData);
 
-                stream.Write((ushort)texture.ColorsUsed);
+                stream.Write((ushort)texture.Palette.Length);
                 foreach (var color in texture.Palette)
                     stream.Write(color);
                 stream.Write(new byte[2]);  // Padding.
@@ -143,7 +143,7 @@ namespace WadMaker
                 stream.Write((uint)texture.Height);
                 stream.Write(texture.ImageData);
 
-                stream.Write((ushort)texture.ColorsUsed);
+                stream.Write((ushort)texture.Palette.Length);
                 foreach (var color in texture.Palette)
                     stream.Write(color);
                 stream.Write(new byte[2]);  // Padding.
@@ -174,69 +174,69 @@ namespace WadMaker
         {
             stream.Seek(lump.Offset, SeekOrigin.Begin);
 
-            var texture = new Texture();
-            texture.Type = lump.Type;
-            texture.Name = lump.Name;
-
             if (lump.Type == TextureType.MipmapTexture)
             {
-                texture.Name = stream.ReadString(16);
-                texture.Width = (int)stream.ReadUint();
-                texture.Height = (int)stream.ReadUint();
+                var name = stream.ReadString(16);
+                var width = (int)stream.ReadUint();
+                var height = (int)stream.ReadUint();
                 var offset = stream.ReadUint();
                 var mipmap1Offset = stream.ReadUint();
                 var mipmap2Offset = stream.ReadUint();
                 var mipmap3Offset = stream.ReadUint();
 
                 stream.Seek(lump.Offset + offset, SeekOrigin.Begin);
-                texture.ImageData = stream.ReadBytes(texture.Width * texture.Height);
+                var imageData = stream.ReadBytes(width * height);
 
                 stream.Seek(lump.Offset + mipmap1Offset, SeekOrigin.Begin);
-                texture.Mipmap1Data = stream.ReadBytes(texture.Width / 2 * texture.Height / 2);
+                var mipmap1Data = stream.ReadBytes(width / 2 * height / 2);
 
                 stream.Seek(lump.Offset + mipmap2Offset, SeekOrigin.Begin);
-                texture.Mipmap2Data = stream.ReadBytes(texture.Width / 4 * texture.Height / 4);
+                var mipmap2Data = stream.ReadBytes(width / 4 * height / 4);
 
                 stream.Seek(lump.Offset + mipmap3Offset, SeekOrigin.Begin);
-                texture.Mipmap3Data = stream.ReadBytes(texture.Width / 8 * texture.Height / 8);
+                var mipmap3Data = stream.ReadBytes(width / 8 * height / 8);
 
-                texture.ColorsUsed = stream.ReadUshort();
-                texture.Palette = Enumerable.Range(0, texture.ColorsUsed)
+                var paletteSize = stream.ReadUshort();
+                var palette = Enumerable.Range(0, paletteSize)
                     .Select(i => stream.ReadColor())
                     .ToArray();
                 stream.ReadBytes(2);    // Padding.
-                return texture;
+
+                return Texture.CreateMipmapTexture(name, width, height, imageData, palette, mipmap1Data, mipmap2Data, mipmap3Data);
             }
             else if (lump.Type == TextureType.Font)
             {
-                texture.Width = (int)stream.ReadUint();
-                texture.Height = (int)stream.ReadUint();
+                var width = (int)stream.ReadUint();
+                var height = (int)stream.ReadUint();
 
-                texture.RowCount = (int)stream.ReadUint();
-                texture.RowHeight = (int)stream.ReadUint();
-                texture.CharInfos = Enumerable.Range(0, 256)
+                var rowCount = (int)stream.ReadUint();
+                var rowHeight = (int)stream.ReadUint();
+                var charInfos = Enumerable.Range(0, 256)
                     .Select(i => new CharInfo { StartOffset = stream.ReadUshort(), CharWidth = stream.ReadUshort() })
                     .ToArray();
-                texture.ImageData = stream.ReadBytes(texture.Width * texture.Height);
+                var imageData = stream.ReadBytes(width * height);
 
-                texture.ColorsUsed = stream.ReadUshort();
-                texture.Palette = Enumerable.Range(0, 256)
+                var paletteSize = stream.ReadUshort();
+                var palette = Enumerable.Range(0, paletteSize)
                     .Select(i => stream.ReadColor())
                     .ToArray();
                 stream.ReadBytes(2);    // Padding.
-                return texture;
+
+                return Texture.CreateFont(lump.Name, width, height, rowCount, rowHeight, charInfos, imageData, palette);
             }
             else if (lump.Type == TextureType.SimpleTexture)
             {
-                texture.Width = (int)stream.ReadUint();
-                texture.Height = (int)stream.ReadUint();
-                texture.ImageData = stream.ReadBytes(texture.Width * texture.Height);
-                texture.ColorsUsed = stream.ReadUshort();
-                texture.Palette = Enumerable.Range(0, 256)
+                var width = (int)stream.ReadUint();
+                var height = (int)stream.ReadUint();
+                var imageData = stream.ReadBytes(width * height);
+
+                var paletteSize = stream.ReadUshort();
+                var palette = Enumerable.Range(0, paletteSize)
                     .Select(i => stream.ReadColor())
                     .ToArray();
                 stream.ReadBytes(2);    // Padding.
-                return texture;
+
+                return Texture.CreateSimpleTexture(lump.Name, width, height, imageData, palette);
             }
             else
             {
