@@ -248,18 +248,31 @@ namespace WadMaker
         {
             if (texture.Type == TextureType.MipmapTexture)
             {
-                var size = (uint)(40 + (texture.Width * texture.Height) + (texture.Width / 2 * texture.Height / 2) + (texture.Width / 4 * texture.Height / 4) + (texture.Width / 8 * texture.Height / 8) + 2);
-                if (texture.Type == TextureType.MipmapTexture)
-                    size += 256 * 3;
-                return size + 2;
+                var size = 40;
+                size += texture.ImageData.Length;
+                size += texture.Mipmap1Data.Length;
+                size += texture.Mipmap2Data.Length;
+                size += texture.Mipmap3Data.Length;
+                size += texture.Palette.Length * 3;
+                size += 4;
+                return (uint)size;
             }
             else if (texture.Type == TextureType.Font)
             {
-                return (uint)(16 + (256 * 4) + (texture.Width * texture.Height) + 4);
+                var size = 16;
+                size += texture.CharInfos.Length * 4;
+                size += texture.ImageData.Length;
+                size += texture.Palette.Length * 3;
+                size += 4;
+                return (uint)size;
             }
             else if (texture.Type == TextureType.SimpleTexture)
             {
-                return (uint)(8 + (texture.Width * texture.Height) + 4);
+                var size = 8;
+                size += texture.ImageData.Length;
+                size += texture.Palette.Length * 3;
+                size += 4;
+                return (uint)size;
             }
             else
             {

@@ -50,6 +50,8 @@ namespace WadMaker
 
         #region Writing
 
+        public static void Write(this Stream stream, byte value) => stream.WriteByte(value);
+
         public static void Write(this Stream stream, ushort value) => stream.Write(BitConverter.GetBytes(value));
 
         public static void Write(this Stream stream, int value) => stream.Write(BitConverter.GetBytes(value));
