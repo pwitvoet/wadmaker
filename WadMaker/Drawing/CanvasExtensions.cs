@@ -124,7 +124,7 @@ namespace WadMaker.Drawing
         /// <summary>
         /// Returns the counts of all colors that are used in this canvas.
         /// </summary>
-        public static IDictionary<Color, int> GetColorHistogram(this ICanvas canvas)
+        public static IDictionary<Color, int> GetColorHistogram(this IReadableCanvas canvas)
         {
             var histogram = new Dictionary<Color, int>();
             for (int y = 0; y < canvas.Height; y++)
