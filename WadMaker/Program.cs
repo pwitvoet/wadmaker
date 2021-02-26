@@ -125,10 +125,32 @@ namespace WadMaker
             Console.WriteLine($"Extracted {wad.Textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        // TODO: IMPLEMENT THIS!!!
+        // TODO: Implement partial rebuilds ('smart mode'), which updates an existing wad (processing only added, modified and deleted image files)!
+        // TODO: Add support for more image file formats!
         static void BuildWad(string inputDirectory, string outputWadPath, bool fullRebuild)
         {
-            throw new NotImplementedException("TODO");
+            var stopwatch = Stopwatch.StartNew();
+
+            var wad = new Wad();
+            foreach (var filePath in Directory.EnumerateFiles(inputDirectory))
+            {
+                var extension = Path.GetExtension(filePath).ToLower();
+                if (extension != ".png" && extension != ".bmp")
+                    continue;
+
+                try
+                {
+                    var texture = CreateTextureFromImage(filePath);
+                    wad.Textures.Add(texture);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                }
+            }
+            wad.Save(outputWadPath);
+
+            Console.WriteLine($"Created {wad.Textures.Count} textures from {inputDirectory} to {outputWadPath}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
 
@@ -173,5 +195,53 @@ namespace WadMaker
             var scale = 1 << mipmap;
             return IndexedCanvas.Create(texture.Width / scale, texture.Height / scale, PixelFormat.Format8bppIndexed, texture.Palette, mipmapData, texture.Width / scale);
         }
+
+
+        static Texture CreateTextureFromImage(string path)
+        {
+            using (var bitmap = new Bitmap(path))
+            {
+                if (bitmap.Width % 16 != 0 || bitmap.Height % 16 != 0)
+                    throw new InvalidDataException($"Texture '{Path.GetFileNameWithoutExtension(path)}' width or height is not a multiple of 16.");
+
+
+                var bitmapCanvas = CreateIndexedCanvasFromImage(bitmap);
+                return Texture.CreateMipmapTexture(
+                    name: Path.GetFileNameWithoutExtension(path),
+                    width: bitmap.Width,
+                    height: bitmap.Height,
+                    imageData: GetBuffer(bitmapCanvas),
+                    palette: bitmapCanvas.Palette,
+                    mipmap1Data: GetBuffer(CreateMipmap(bitmapCanvas, 2)),
+                    mipmap2Data: GetBuffer(CreateMipmap(bitmapCanvas, 4)),
+                    mipmap3Data: GetBuffer(CreateMipmap(bitmapCanvas, 8)));
+            }
+        }
+
+        // TODO: Color-key handling!
+        static IIndexedCanvas CreateIndexedCanvasFromImage(Bitmap bitmap)
+        {
+            // Indexed formats already use a palette with 256 colors or less:
+            if (bitmap.PixelFormat.HasFlag(PixelFormat.Indexed))
+                return IndexedCanvas.Create(bitmap);
+
+            return ColorQuantization.CreateIndexedCanvas(Canvas.Create(bitmap));
+        }
+
+        // TODO: Take the average color of each block of pixels (or provide texture-specific options for this?)
+        static IIndexedCanvas CreateMipmap(IIndexedCanvas canvas, int scale)
+        {
+            var mipmapCanvas = IndexedCanvas.Create(canvas.Width / scale, canvas.Height / scale, canvas.PixelFormat, canvas.Palette, stride: canvas.Width / scale);
+            for (int y = 0; y < mipmapCanvas.Height; y++)
+            {
+                for (int x = 0; x < mipmapCanvas.Width; x++)
+                {
+                    mipmapCanvas.SetIndex(x, y, canvas.GetIndex(x * scale, y * scale));
+                }
+            }
+            return mipmapCanvas;
+        }
+
+        static byte[] GetBuffer(IReadableCanvas canvas) => (canvas as IBufferCanvas)?.Buffer ?? canvas.CreateBuffer();
     }
 }
