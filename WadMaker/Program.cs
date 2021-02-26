@@ -205,7 +205,9 @@ namespace WadMaker
                     throw new InvalidDataException($"Texture '{Path.GetFileNameWithoutExtension(path)}' width or height is not a multiple of 16.");
 
 
-                var bitmapCanvas = CreateIndexedCanvasFromImage(bitmap);
+                var hasTransparency = Path.GetFileName(path).StartsWith("{");
+
+                var bitmapCanvas = CreateIndexedCanvasFromImage(bitmap, hasTransparency);
                 return Texture.CreateMipmapTexture(
                     name: Path.GetFileNameWithoutExtension(path),
                     width: bitmap.Width,
@@ -219,13 +221,13 @@ namespace WadMaker
         }
 
         // TODO: Color-key handling!
-        static IIndexedCanvas CreateIndexedCanvasFromImage(Bitmap bitmap)
+        static IIndexedCanvas CreateIndexedCanvasFromImage(Bitmap bitmap, bool hasTransparency)
         {
             // Indexed formats already use a palette with 256 colors or less:
             if (bitmap.PixelFormat.HasFlag(PixelFormat.Indexed))
                 return IndexedCanvas.Create(bitmap);
 
-            return ColorQuantization.CreateIndexedCanvas(Canvas.Create(bitmap));
+            return ColorQuantization.CreateIndexedCanvas(Canvas.Create(bitmap), hasTransparency);
         }
 
         // TODO: Take the average color of each block of pixels (or provide texture-specific options for this?)

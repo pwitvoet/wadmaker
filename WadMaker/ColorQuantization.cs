@@ -12,18 +12,28 @@ namespace WadMaker
         /// <summary>
         /// Creates an indexed canvas from the given canvas, by deriving a color palette from the colors in the given canvas.
         /// </summary>
-        public static IIndexedCanvas CreateIndexedCanvas(IReadableCanvas canvas)
+        public static IIndexedCanvas CreateIndexedCanvas(IReadableCanvas canvas, bool hasTransparency)
         {
             if (canvas is IIndexedCanvas alreadyIndexedCanvas)
                 return alreadyIndexedCanvas;
 
 
-            // TODO: Add support for color key transparency!
             var colorHistogram = canvas.GetColorHistogram();
-            (var palette, var paletteIndexLookup) = CreatePaletteAndIndexLookup(colorHistogram, 256);
+            if (hasTransparency)
+            {
+                // Remove transparent colors from the histogram - the final palette slot is reserved to mark transparent pixels:
+                foreach (var color in colorHistogram.Keys.ToArray())
+                    if (IsTransparent(color))
+                        colorHistogram.Remove(color);
+            }
+
+            (var palette, var paletteIndexLookup) = CreatePaletteAndIndexLookup(colorHistogram, hasTransparency ? 255 : 256);
 
             if (palette.Length < 256)
                 palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
+
+            if (hasTransparency)
+                palette[255] = Color.FromArgb(0, 0, 255);   // NOTE: This is customary, not necessary...?
 
             var indexedCanvas = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
             for (int y = 0; y < canvas.Height; y++)
@@ -31,7 +41,7 @@ namespace WadMaker
                 for (int x = 0; x < canvas.Width; x++)
                 {
                     var color = canvas.GetPixel(x, y);
-                    var paletteIndex = paletteIndexLookup(color);
+                    var paletteIndex = (hasTransparency && IsTransparent(color)) ? 255 : paletteIndexLookup(color);
                     indexedCanvas.SetIndex(x, y, paletteIndex);
                 }
             }
@@ -45,6 +55,10 @@ namespace WadMaker
         /// </summary>
         private static (Color[], Func<Color, int>) CreatePaletteAndIndexLookup(IDictionary<Color, int> colorHistogram, int maxColors = 256)
         {
+            if (colorHistogram.Count <= maxColors)
+                return CreatePaletteAndLookup(colorHistogram.Keys);
+
+
             var boundingBoxes = new List<ColorBoundingBox>();
             boundingBoxes.Add(new ColorBoundingBox(colorHistogram.Keys));
 
@@ -74,19 +88,20 @@ namespace WadMaker
                 boundingBoxes.Add(new ColorBoundingBox(highColors));
             }
 
-            var index = 0;
-            var palette = new Color[boundingBoxes.Count];
-            var indexLookup = new Dictionary<Color, int>();
-            foreach (var box in boundingBoxes)
-            {
-                palette[index] = box.GetAverageColor();
-                foreach (var color in box.Colors)
-                    indexLookup[color] = index;
+            return CreatePaletteAndLookup(boundingBoxes.Select(box => box.GetAverageColor()));
 
-                index += 1;
+
+            (Color[], Func<Color, int>) CreatePaletteAndLookup(IEnumerable<Color> colors)
+            {
+                var palette = colors.ToArray();
+                var indexLookup = new Dictionary<Color, int>();
+                for (int i = 0; i < palette.Length; i++)
+                    indexLookup[palette[i]] = i;
+                return (palette, color => indexLookup[color]);
             }
-            return (palette, color => indexLookup[color]);
         }
+
+        private static bool IsTransparent(Color color) => color.A < 128;
 
 
         private class ColorBoundingBox
@@ -98,6 +113,9 @@ namespace WadMaker
             public ColorBoundingBox(IEnumerable<Color> colors)
             {
                 Colors = colors.ToArray();
+                if (!Colors.Any())
+                    throw new ArgumentException("At least one color must be provided.", nameof(colors));
+
                 (Min, Max) = GetMinMaxColors(Colors);
             }
 
@@ -118,9 +136,9 @@ namespace WadMaker
 
             private static (Color, Color) GetMinMaxColors(IEnumerable<Color> colors)
             {
-                var minR = 256;
-                var minG = 256;
-                var minB = 256;
+                var minR = 255;
+                var minG = 255;
+                var minB = 255;
                 var maxR = 0;
                 var maxG = 0;
                 var maxB = 0;
