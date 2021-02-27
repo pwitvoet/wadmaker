@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace WadMaker.Drawing
@@ -22,9 +23,9 @@ namespace WadMaker.Drawing
 
             switch (pixelFormat)
             {
-                case PixelFormat.Format1bppIndexed: return new Canvas1bppIndexed(width, height, actualStride, buffer, palette);
-                case PixelFormat.Format4bppIndexed: return new Canvas4bppIndexed(width, height, actualStride, buffer, palette);
-                case PixelFormat.Format8bppIndexed: return new Canvas8bppIndexed(width, height, actualStride, buffer, palette);
+                case PixelFormat.Format1bppIndexed: return new Canvas1bppIndexed(width, height, actualStride, buffer, CreateFixedSizePalette(palette, 2));
+                case PixelFormat.Format4bppIndexed: return new Canvas4bppIndexed(width, height, actualStride, buffer, CreateFixedSizePalette(palette, 16));
+                case PixelFormat.Format8bppIndexed: return new Canvas8bppIndexed(width, height, actualStride, buffer, CreateFixedSizePalette(palette, 256));
 
                 default: throw new NotSupportedException($"{nameof(IndexedCanvas)} does not support pixel format {pixelFormat}.");
             }
@@ -96,6 +97,20 @@ namespace WadMaker.Drawing
                     for (int x = 0; x < minWidth; x++)
                         destination.SetIndex(x, y, GetIndex(x, y));
             }
+        }
+
+
+        private static Color[] CreateFixedSizePalette(Color[] palette, int size)
+        {
+            if (palette.Length > size)
+                throw new ArgumentException($"Palette must not contain more than {size} colors.", nameof(palette));
+
+            if (palette.Length == size)
+                return palette;
+
+            return palette
+                .Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), size - palette.Length))
+                .ToArray();
         }
     }
 }
