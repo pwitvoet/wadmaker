@@ -10,42 +10,49 @@ namespace WadMaker
     static class ColorQuantization
     {
         /// <summary>
-        /// Creates an indexed canvas from the given canvas, by deriving a color palette from the colors in the given canvas.
+        /// Creates indexed canvases from the given canvases, by deriving a color palette from the colors in the given canvases.
+        /// All output canvases will share the same palette.
         /// </summary>
-        public static IIndexedCanvas CreateIndexedCanvas(IReadableCanvas canvas, bool hasTransparency)
+        public static IEnumerable<IIndexedCanvas> CreateIndexedCanvases(IEnumerable<IReadableCanvas> canvases, bool hasTransparency)
         {
-            if (canvas is IIndexedCanvas alreadyIndexedCanvas)
-                return alreadyIndexedCanvas;
+            // First gather all the unique colors from the input canvases:
+            var inputCanvases = canvases.ToArray();
+            var uniqueColors = inputCanvases
+                .Select(CanvasExtensions.GetColorHistogram)
+                .SelectMany(histogram => histogram.Keys)
+                .ToHashSet();
 
-
-            var colorHistogram = canvas.GetColorHistogram();
             if (hasTransparency)
-            {
-                // Remove transparent colors from the histogram - the final palette slot is reserved to mark transparent pixels:
-                foreach (var color in colorHistogram.Keys.ToArray())
-                    if (IsTransparent(color))
-                        colorHistogram.Remove(color);
-            }
+                uniqueColors.RemoveWhere(IsTransparent);
 
-            (var palette, var paletteIndexLookup) = CreatePaletteAndIndexLookup(colorHistogram, hasTransparency ? 255 : 256);
+
+            // Then create a suitable palette (if transparency is enabled, then the final palette slot will be reserved for transparent pixels):
+            (var palette, var paletteIndexLookup) = CreatePaletteAndIndexLookup(uniqueColors, hasTransparency ? 255 : 256);
 
             if (palette.Length < 256)
                 palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
 
             if (hasTransparency)
-                palette[255] = Color.FromArgb(0, 0, 255);   // NOTE: This is customary, not necessary...?
+                palette[255] = Color.FromArgb(0, 0, 255);   // Make the transparent color deep blue, by convention.
 
-            var indexedCanvas = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
-            for (int y = 0; y < canvas.Height; y++)
-            {
-                for (int x = 0; x < canvas.Width; x++)
+
+            // Finally, convert the input canvases, applying the palette that was just created:
+            return inputCanvases
+                .Select(canvas =>
                 {
-                    var color = canvas.GetPixel(x, y);
-                    var paletteIndex = (hasTransparency && IsTransparent(color)) ? 255 : paletteIndexLookup(color);
-                    indexedCanvas.SetIndex(x, y, paletteIndex);
-                }
-            }
-            return indexedCanvas;
+                    var outputCanvas = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
+                    for (int y = 0; y < canvas.Height; y++)
+                    {
+                        for (int x = 0; x < canvas.Width; x++)
+                        {
+                            var color = canvas.GetPixel(x, y);
+                            var paletteIndex = (hasTransparency && IsTransparent(color)) ? 255 : paletteIndexLookup(color);
+                            outputCanvas.SetIndex(x, y, paletteIndex);
+                        }
+                    }
+                    return outputCanvas;
+                })
+                .ToArray();
         }
 
 
@@ -53,14 +60,14 @@ namespace WadMaker
         /// Creates a palette from the given color histogram, along with a lookup function that maps colors that occur in the histogram to a palette index.
         /// This uses a median-cut algorithm.
         /// </summary>
-        private static (Color[], Func<Color, int>) CreatePaletteAndIndexLookup(IDictionary<Color, int> colorHistogram, int maxColors = 256)
+        private static (Color[], Func<Color, int>) CreatePaletteAndIndexLookup(HashSet<Color> uniqueColors, int maxColors = 256)
         {
-            if (colorHistogram.Count <= maxColors)
-                return CreatePaletteAndLookup(colorHistogram.Keys);
+            if (uniqueColors.Count <= maxColors)
+                return CreatePaletteAndLookup(uniqueColors.ToDictionary(color => color, color => new[] { color }));
 
 
             var boundingBoxes = new List<ColorBoundingBox>();
-            boundingBoxes.Add(new ColorBoundingBox(colorHistogram.Keys));
+            boundingBoxes.Add(new ColorBoundingBox(uniqueColors));
 
             while (boundingBoxes.Count < maxColors)
             {
@@ -88,15 +95,24 @@ namespace WadMaker
                 boundingBoxes.Add(new ColorBoundingBox(highColors));
             }
 
-            return CreatePaletteAndLookup(boundingBoxes.Select(box => box.GetAverageColor()));
+            return CreatePaletteAndLookup(boundingBoxes.ToDictionary(box => box.GetAverageColor(), box => box.Colors));
 
 
-            (Color[], Func<Color, int>) CreatePaletteAndLookup(IEnumerable<Color> colors)
+            (Color[], Func<Color, int>) CreatePaletteAndLookup(IDictionary<Color, Color[]> colorMappings)
             {
-                var palette = colors.ToArray();
+                var palette = new Color[colorMappings.Count];
                 var indexLookup = new Dictionary<Color, int>();
-                for (int i = 0; i < palette.Length; i++)
-                    indexLookup[palette[i]] = i;
+
+                var index = 0;
+                foreach (var kv in colorMappings)
+                {
+                    palette[index] = kv.Key;
+                    foreach (var color in kv.Value)
+                        indexLookup[color] = index;
+
+                    index += 1;
+                }
+
                 return (palette, color => indexLookup[color]);
             }
         }

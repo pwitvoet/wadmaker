@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using WadMaker.Drawing;
 
@@ -94,7 +95,6 @@ namespace WadMaker
         }
 
         // TODO: What if dir already exists? ...ask to overwrite files? maybe add a -force cmd flag?
-        // TODO: Also extract mipmaps? (texture.mipmap1.png?)
         // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
         //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
         static void ExtractWad(string inputWadPath, string outputDirectory, bool extractMipmaps)
@@ -126,6 +126,7 @@ namespace WadMaker
         }
 
         // TODO: Implement partial rebuilds ('smart mode'), which updates an existing wad (processing only added, modified and deleted image files)!
+        // TODO: Detect filename clashes (same filename, different extensions)! Maybe resolve that by prioritizing certain extensions over others?
         // TODO: Add support for more image file formats!
         static void BuildWad(string inputDirectory, string outputWadPath, bool fullRebuild)
         {
@@ -134,6 +135,10 @@ namespace WadMaker
             var wad = new Wad();
             foreach (var filePath in Directory.EnumerateFiles(inputDirectory))
             {
+                var filename = Path.GetFileNameWithoutExtension(filePath).ToLower();
+                if (filename.Contains(".mipmap"))
+                    continue;
+
                 var extension = Path.GetExtension(filePath).ToLower();
                 if (extension != ".png" && extension != ".bmp")
                     continue;
@@ -199,35 +204,41 @@ namespace WadMaker
 
         static Texture CreateTextureFromImage(string path)
         {
-            using (var bitmap = new Bitmap(path))
-            {
-                if (bitmap.Width % 16 != 0 || bitmap.Height % 16 != 0)
-                    throw new InvalidDataException($"Texture '{Path.GetFileNameWithoutExtension(path)}' width or height is not a multiple of 16.");
+            // First load all input images (mipmaps are optional, missing ones will be generated automatically):
+            var imageCanvas = CanvasFromFile(path);
+            if (imageCanvas.Width % 16 != 0 || imageCanvas.Height % 16 != 0)
+                throw new InvalidDataException($"Texture '{path}' width or height is not a multiple of 16.");
 
+            var mipmapCanvases = Enumerable.Range(0, 3)
+                .Select(i => Path.ChangeExtension(path, $".mipmap{i + 1}{Path.GetExtension(path)}"))
+                .Select(path => File.Exists(path) ? CanvasFromFile(path) : null)
+                .ToArray();
 
-                var hasTransparency = Path.GetFileName(path).StartsWith("{");
+            // Then quantize the images (together, because they'll be using the same palette):
+            var hasTransparency = Path.GetFileName(path).StartsWith("{");
+            var quantizedCanvases = ColorQuantization.CreateIndexedCanvases(mipmapCanvases.Where(mipmap => mipmap != null).Prepend(imageCanvas), hasTransparency).ToArray();
 
-                var bitmapCanvas = CreateIndexedCanvasFromImage(bitmap, hasTransparency);
-                return Texture.CreateMipmapTexture(
-                    name: Path.GetFileNameWithoutExtension(path),
-                    width: bitmap.Width,
-                    height: bitmap.Height,
-                    imageData: GetBuffer(bitmapCanvas),
-                    palette: bitmapCanvas.Palette,
-                    mipmap1Data: GetBuffer(CreateMipmap(bitmapCanvas, 2)),
-                    mipmap2Data: GetBuffer(CreateMipmap(bitmapCanvas, 4)),
-                    mipmap3Data: GetBuffer(CreateMipmap(bitmapCanvas, 8)));
-            }
+            var mipmapIndex = 1;
+            return Texture.CreateMipmapTexture(
+                name: Path.GetFileNameWithoutExtension(path),
+                width: imageCanvas.Width,
+                height: imageCanvas.Height,
+                imageData: GetBuffer(quantizedCanvases[0]),
+                palette: quantizedCanvases[0].Palette,
+                mipmap1Data: GetBuffer(mipmapCanvases[0] != null ? quantizedCanvases[mipmapIndex++] : CreateMipmap(quantizedCanvases[0], 2)),
+                mipmap2Data: GetBuffer(mipmapCanvases[1] != null ? quantizedCanvases[mipmapIndex++] : CreateMipmap(quantizedCanvases[0], 4)),
+                mipmap3Data: GetBuffer(mipmapCanvases[2] != null ? quantizedCanvases[mipmapIndex++] : CreateMipmap(quantizedCanvases[0], 8)));
         }
 
-        // TODO: Color-key handling!
-        static IIndexedCanvas CreateIndexedCanvasFromImage(Bitmap bitmap, bool hasTransparency)
+        static IReadableCanvas CanvasFromFile(string path)
         {
-            // Indexed formats already use a palette with 256 colors or less:
-            if (bitmap.PixelFormat.HasFlag(PixelFormat.Indexed))
-                return IndexedCanvas.Create(bitmap);
+            using (var bitmap = new Bitmap(path))
+            {
+                if (bitmap.PixelFormat.HasFlag(PixelFormat.Indexed))
+                    return IndexedCanvas.Create(bitmap);
 
-            return ColorQuantization.CreateIndexedCanvas(Canvas.Create(bitmap), hasTransparency);
+                return Canvas.Create(bitmap);
+            }
         }
 
         // TODO: Take the average color of each block of pixels (or provide texture-specific options for this?)
