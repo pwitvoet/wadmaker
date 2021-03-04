@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -35,7 +36,7 @@ namespace WadMaker
                 }
                 else
                 {
-                    BuildWad(settings.InputDirectory, settings.WadPath, settings.FullRebuild);
+                    MakeWad(settings.InputDirectory, settings.WadPath, settings.FullRebuild);
                 }
             }
             catch (Exception ex)
@@ -125,39 +126,145 @@ namespace WadMaker
             Console.WriteLine($"Extracted {wad.Textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        // TODO: Implement partial rebuilds ('smart mode'), which updates an existing wad (processing only added, modified and deleted image files)!
-        // TODO: Detect filename clashes (same filename, different extensions)! Maybe resolve that by prioritizing certain extensions over others?
         // TODO: Add support for more image file formats!
-        static void BuildWad(string inputDirectory, string outputWadPath, bool fullRebuild)
+        static void MakeWad(string inputDirectory, string outputWadPath, bool fullRebuild)
         {
             var stopwatch = Stopwatch.StartNew();
 
-            var wad = new Wad();
-            foreach (var filePath in Directory.EnumerateFiles(inputDirectory))
-            {
-                var filename = Path.GetFileNameWithoutExtension(filePath).ToLower();
-                if (filename.Contains(".mipmap"))
-                    continue;
+            var texturesAdded = 0;
+            var texturesUpdated = 0;
+            var texturesRemoved = 0;
 
-                var extension = Path.GetExtension(filePath).ToLower();
-                if (extension != ".png" && extension != ".bmp")
+            var updateExistingWad = !fullRebuild && File.Exists(outputWadPath);
+            var wad = updateExistingWad ? Wad.Load(outputWadPath) : new Wad();
+            var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputWadPath).LastWriteTimeUtc : (DateTime?)null;
+            var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
+
+            // Multiple files can map to the same texture, due to different extensions and upper/lower-case differences.
+            // We'll group files by texture name, to make these collisions easy to detect:
+            var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory).ToHashSet();
+            var textureImagePaths = allInputDirectoryFiles
+                .Where(IsSupportedFiletype)
+                .Where(path => !path.Contains(".mipmap"))
+                .GroupBy(path => Path.GetFileNameWithoutExtension(path).ToLowerInvariant());
+
+            // Check for new and updated images:
+            foreach (var imagePaths in textureImagePaths)
+            {
+                var textureName = imagePaths.Key;
+                if (!IsValidTextureName(textureName))
+                {
+                    Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePaths)}). Skipping file(s).");
                     continue;
+                }
+                else if (textureName.Length > 16)
+                {
+                    Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePaths)}). Skipping file(s).");
+                    continue;
+                }
+                else if (imagePaths.Count() > 1)
+                {
+                    Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePaths)}). Skipping files.");
+                    continue;
+                }
+
+
+                var filePath = imagePaths.Single();
+                var isExistingImage = wadTextureNames.Contains(textureName);
+                if (isExistingImage && updateExistingWad)
+                {
+                    // NOTE: A texture will not be rebuilt if one of its mipmap files has been removed. In order to detect such cases,
+                    //       WadMaker would need to store additional bookkeeping data, but right now that doesn't seem worth the trouble.
+                    // NOTE: Mipmaps must have the same extension as the main image file.
+                    var isImageUpdated = GetMipmapFilePaths(filePath)
+                        .Prepend(filePath)
+                        .Where(allInputDirectoryFiles.Contains)
+                        .Select(path => new FileInfo(path).LastWriteTimeUtc)
+                        .Any(dateTime => dateTime > lastWadUpdateTime);
+                    if (!isImageUpdated)
+                    {
+                        //Console.WriteLine($"No modifications detected for '{textureName}' ({filePath}). Skipping file.");
+                        continue;
+                    }
+                }
 
                 try
                 {
+                    // Create texture from image:
                     var texture = CreateTextureFromImage(filePath);
-                    wad.Textures.Add(texture);
+
+                    if (isExistingImage)
+                    {
+                        // Update (replace) existing texture:
+                        for (int i = 0; i < wad.Textures.Count; i++)
+                        {
+                            if (wad.Textures[i].Name == texture.Name)
+                            {
+                                wad.Textures[i] = texture;
+                                break;
+                            }
+                        }
+                        texturesUpdated += 1;
+                        if (updateExistingWad)
+                            Console.WriteLine($"Updated texture '{textureName}' (from {filePath}).");
+                    }
+                    else
+                    {
+                        // Add new texture:
+                        wad.Textures.Add(texture);
+                        wadTextureNames.Add(textureName);
+                        texturesAdded += 1;
+                        Console.WriteLine($"Added texture '{textureName}' (from {filePath}).");
+                    }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
                 }
             }
+
+            if (updateExistingWad)
+            {
+                // Check for removed images:
+                var directoryTextureNames = textureImagePaths
+                    .Select(group => group.Key)
+                    .ToHashSet();
+                foreach (var textureName in wadTextureNames)
+                {
+                    if (!directoryTextureNames.Contains(textureName))
+                    {
+                        // Delete texture:
+                        wad.Textures.Remove(wad.Textures.First(texture => texture.Name == textureName));
+                        texturesRemoved += 1;
+                        Console.WriteLine($"Removed texture '{textureName}'.");
+                    }
+                }
+            }
+
+            // Finally, save the wad file:
             wad.Save(outputWadPath);
 
-            Console.WriteLine($"Created {wad.Textures.Count} textures from {inputDirectory} to {outputWadPath}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            if (updateExistingWad)
+                Console.WriteLine($"Updated {outputWadPath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            else
+                Console.WriteLine($"Created {outputWadPath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
+
+        // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, spaces, parenthesis, etc.?)
+        static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256);
+
+        static bool IsSupportedFiletype(string path)
+        {
+            var extension = Path.GetExtension(path);
+            return extension == ".png" || extension == ".bmp" || extension == ".jpg";
+        }
+
+        static IEnumerable<string> GetMipmapFilePaths(string path)
+        {
+            for (int mipmap = 1; mipmap <= 3; mipmap++)
+                yield return Path.ChangeExtension(path, $".mipmap{mipmap}{Path.GetExtension(path)}");
+        }
 
         static Bitmap TextureToBitmap(Texture texture, int mipmap = 0)
         {
@@ -201,7 +308,6 @@ namespace WadMaker
             return IndexedCanvas.Create(texture.Width / scale, texture.Height / scale, PixelFormat.Format8bppIndexed, texture.Palette, mipmapData, texture.Width / scale);
         }
 
-
         static Texture CreateTextureFromImage(string path)
         {
             // First load all input images (mipmaps are optional, missing ones will be generated automatically):
@@ -209,9 +315,8 @@ namespace WadMaker
             if (imageCanvas.Width % 16 != 0 || imageCanvas.Height % 16 != 0)
                 throw new InvalidDataException($"Texture '{path}' width or height is not a multiple of 16.");
 
-            var mipmapCanvases = Enumerable.Range(0, 3)
-                .Select(i => Path.ChangeExtension(path, $".mipmap{i + 1}{Path.GetExtension(path)}"))
-                .Select(path => File.Exists(path) ? CanvasFromFile(path) : null)
+            var mipmapCanvases = GetMipmapFilePaths(path)
+                .Select(mipmapPath => File.Exists(mipmapPath) ? CanvasFromFile(mipmapPath) : null)
                 .ToArray();
 
             // Then quantize the images (together, because they'll be using the same palette):
