@@ -12,13 +12,14 @@ namespace WadMaker
 {
     class Settings
     {
-        public bool FullRebuild { get; set; }           // -full: forces a full rebuild instead of an incremental one
-        public bool Extract { get; set; }               // -extract: extracts textures from a wad file instead of building a wad file
-        public bool ExtractMipmaps { get; set; }        // -mipmaps: also extracts mipmaps
+        public bool FullRebuild { get; set; }               // -full: forces a full rebuild instead of an incremental one
+        public bool Extract { get; set; }                   // -extract: extracts textures from a wad file instead of building a wad file
+        public bool ExtractMipmaps { get; set; }            // -mipmaps: also extracts mipmaps
+        public bool OverwriteExistingFiles { get; set; }    // -overwrite: extract mode only, enables overwriting of existing image files (off by default)
 
-        public string InputDirectory { get; set; }      // Build mode only
-        public string WadPath { get; set; }             // Wad path (output in build mode, input in extract mode).
-        public string OutputDirectory { get; set; }     // Extract mode only
+        public string InputDirectory { get; set; }          // Build mode only
+        public string WadPath { get; set; }                 // Wad path (output in build mode, input in extract mode).
+        public string OutputDirectory { get; set; }         // Extract mode only
     }
 
     class Program
@@ -32,7 +33,7 @@ namespace WadMaker
                 var settings = ParseArguments(args);
                 if (settings.Extract)
                 {
-                    ExtractWad(settings.WadPath, settings.OutputDirectory, settings.ExtractMipmaps);
+                    ExtractWad(settings.WadPath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
                 }
                 else
                 {
@@ -60,6 +61,7 @@ namespace WadMaker
                     case "-full": settings.FullRebuild = true; break;
                     case "-extract": settings.Extract = true; break;
                     case "-mipmaps": settings.ExtractMipmaps = true; break;
+                    case "-overwrite": settings.OverwriteExistingFiles = true; break;
                     default: throw new ArgumentException($"Unknown argument: '{arg}'.");
                 }
             }
@@ -98,12 +100,15 @@ namespace WadMaker
         // TODO: What if dir already exists? ...ask to overwrite files? maybe add a -force cmd flag?
         // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
         //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
-        static void ExtractWad(string inputWadPath, string outputDirectory, bool extractMipmaps)
+        static void ExtractWad(string inputWadPath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles)
         {
             var stopwatch = Stopwatch.StartNew();
 
+            var imageFilesCreated = 0;
+
             var wad = Wad.Load(inputWadPath);
             Directory.CreateDirectory(outputDirectory);
+
             foreach (var texture in wad.Textures)
             {
                 var maxMipmap = extractMipmaps ? 4 : 1;
@@ -111,9 +116,17 @@ namespace WadMaker
                 {
                     try
                     {
+                        var filePath = Path.Combine(outputDirectory, texture.Name + $"{(mipmap > 0 ? ".mipmap" + mipmap : "")}.png");
+                        if (!overwriteExistingFiles && File.Exists(filePath))
+                        {
+                            Console.WriteLine($"WARNING: {filePath} already exist. Skipping texture.");
+                            continue;
+                        }
+
                         using (var image = TextureToBitmap(texture, mipmap))
                         {
-                            image.Save(Path.Combine(outputDirectory, texture.Name + $"{(mipmap > 0 ? ".mipmap" + mipmap : "")}.png"), ImageFormat.Png);
+                            image.Save(filePath, ImageFormat.Png);
+                            imageFilesCreated += 1;
                         }
                     }
                     catch (Exception ex)
@@ -123,7 +136,7 @@ namespace WadMaker
                 }
             }
 
-            Console.WriteLine($"Extracted {wad.Textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Console.WriteLine($"Extracted {imageFilesCreated} images from {wad.Textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         // TODO: Add support for more image file formats!
