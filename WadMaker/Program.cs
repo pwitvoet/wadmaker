@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using WadMaker.Drawing;
 
 namespace WadMaker
@@ -24,6 +25,9 @@ namespace WadMaker
 
     class Program
     {
+        static Regex AnimatedTextureNameRegex = new Regex(@"^\+[0-9A-J]");
+
+
         static void Main(string[] args)
         {
             try
@@ -180,6 +184,7 @@ namespace WadMaker
                     Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePaths)}). Skipping files.");
                     continue;
                 }
+                // NOTE: Texture dimensions (which must be multiples of 16) are checked later, in CreateTextureFromImage.
 
 
                 var filePath = imagePaths.Single();
@@ -204,7 +209,7 @@ namespace WadMaker
                 try
                 {
                     // Create texture from image:
-                    var texture = CreateTextureFromImage(filePath);
+                    var texture = CreateTextureFromImage(filePath, new TextureSettings { });    // TODO: Load texture-specific settings from files!
 
                     if (isExistingImage)
                     {
@@ -264,21 +269,7 @@ namespace WadMaker
         }
 
 
-        // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, spaces, parenthesis, etc.?)
-        static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256);
-
-        static bool IsSupportedFiletype(string path)
-        {
-            var extension = Path.GetExtension(path);
-            return extension == ".png" || extension == ".bmp" || extension == ".jpg";
-        }
-
-        static IEnumerable<string> GetMipmapFilePaths(string path)
-        {
-            for (int mipmap = 1; mipmap <= 3; mipmap++)
-                yield return Path.ChangeExtension(path, $".mipmap{mipmap}{Path.GetExtension(path)}");
-        }
-
+        // Wad extraction:
         static Bitmap TextureToBitmap(Texture texture, int mipmap = 0)
         {
             var hasColorKey = texture.Name.StartsWith('{');
@@ -321,7 +312,25 @@ namespace WadMaker
             return IndexedCanvas.Create(texture.Width / scale, texture.Height / scale, PixelFormat.Format8bppIndexed, texture.Palette, mipmapData, texture.Width / scale);
         }
 
-        static Texture CreateTextureFromImage(string path)
+
+
+        // Wad making:
+        // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, spaces, parenthesis, etc.?)
+        static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256);
+
+        static bool IsSupportedFiletype(string path)
+        {
+            var extension = Path.GetExtension(path);
+            return extension == ".png" || extension == ".bmp" || extension == ".jpg";
+        }
+
+        static IEnumerable<string> GetMipmapFilePaths(string path)
+        {
+            for (int mipmap = 1; mipmap <= 3; mipmap++)
+                yield return Path.ChangeExtension(path, $".mipmap{mipmap}{Path.GetExtension(path)}");
+        }
+
+        static Texture CreateTextureFromImage(string path, TextureSettings textureSettings)
         {
             // First load all input images (mipmaps are optional, missing ones will be generated automatically):
             var imageCanvas = CanvasFromFile(path);
@@ -332,20 +341,82 @@ namespace WadMaker
                 .Select(mipmapPath => File.Exists(mipmapPath) ? CanvasFromFile(mipmapPath) : null)
                 .ToArray();
 
-            // Then quantize the images (together, because they'll be using the same palette):
-            var hasTransparency = Path.GetFileName(path).StartsWith("{");
-            var quantizedCanvases = ColorQuantization.CreateIndexedCanvases(mipmapCanvases.Where(mipmap => mipmap != null).Prepend(imageCanvas), hasTransparency).ToArray();
 
-            var mipmapIndex = 1;
+            // Create the palette (also taking the mipmaps into account, because they'll be sharing the palette):
+            var filename = Path.GetFileName(path);
+            var isTransparentTexture = filename.StartsWith("{");
+            var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(filename);
+
+            var canvases = mipmapCanvases
+                .Prepend(imageCanvas)
+                .ToArray();
+            var uniqueColors = canvases
+                .Where(canvas => canvas != null)
+                .SelectMany(canvas => canvas.GetColorHistogram().Keys)
+                .ToHashSet();
+
+            if (isTransparentTexture)
+                uniqueColors.RemoveWhere(color => color.A < 128);
+
+            (var palette, var colorIndexMapping) = ColorQuantization.CreatePaletteAndColorIndexMapping(
+                uniqueColors,
+                isTransparentTexture ? 255 : 256,
+                textureSettings.QuantizationVolumeSelectionTreshold ?? 32);
+
+            if (palette.Length < 256)
+                palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
+
+            if (isTransparentTexture)
+                palette[255] = Color.FromArgb(0, 0, 255);   // Make the transparent color deep blue, by convention.
+
+
+            // Finally, apply the palette (optionally using a dithering algorithm):
+            var transparencyTreshold = textureSettings.TransparencyTreshold ?? (isTransparentTexture ? 128 : 0);
+            var colorIndexLookup = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMapping, color => color.A < transparencyTreshold);
+            var resultCanvases = canvases
+                .Select(canvas => (canvas != null) ? ApplyPalette(canvas, palette, colorIndexLookup, textureSettings, isAnimatedTexture) : null)
+                .ToArray();
+
             return Texture.CreateMipmapTexture(
                 name: Path.GetFileNameWithoutExtension(path),
                 width: imageCanvas.Width,
                 height: imageCanvas.Height,
-                imageData: GetBuffer(quantizedCanvases[0]),
-                palette: quantizedCanvases[0].Palette,
-                mipmap1Data: GetBuffer(mipmapCanvases[0] != null ? quantizedCanvases[mipmapIndex++] : CreateMipmap(quantizedCanvases[0], 2)),
-                mipmap2Data: GetBuffer(mipmapCanvases[1] != null ? quantizedCanvases[mipmapIndex++] : CreateMipmap(quantizedCanvases[0], 4)),
-                mipmap3Data: GetBuffer(mipmapCanvases[2] != null ? quantizedCanvases[mipmapIndex++] : CreateMipmap(quantizedCanvases[0], 8)));
+                imageData: GetBuffer(resultCanvases[0]),
+                palette: palette,
+                mipmap1Data: GetBuffer(resultCanvases[1] != null ? resultCanvases[1] : CreateMipmap(resultCanvases[0], 2)),
+                mipmap2Data: GetBuffer(resultCanvases[2] != null ? resultCanvases[2] : CreateMipmap(resultCanvases[0], 4)),
+                mipmap3Data: GetBuffer(resultCanvases[3] != null ? resultCanvases[3] : CreateMipmap(resultCanvases[0], 8)));
+        }
+
+        // TODO: Without dithering there's still some potential for flickering, due to the palette being different!
+        static IIndexedCanvas ApplyPalette(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup, TextureSettings textureSettings, bool isAnimatedTexture)
+        {
+            // Do not apply dithering to animated textures, unless specifically requested, to avoid 'flickering':
+            var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (isAnimatedTexture ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
+            switch (ditheringAlgorithm)
+            {
+                default:
+                case DitheringAlgorithm.None:
+                    return ApplyPaletteWithoutDithering(canvas, palette, colorIndexLookup);
+
+                case DitheringAlgorithm.FloydSteinberg:
+                    return Dithering.FloydSteinberg(canvas, palette, colorIndexLookup, textureSettings.MaxErrorDiffusion ?? 255);
+            }
+        }
+
+        static IIndexedCanvas ApplyPaletteWithoutDithering(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup)
+        {
+            var output = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
+            for (int y = 0; y < canvas.Height; y++)
+            {
+                for (int x = 0; x < canvas.Width; x++)
+                {
+                    var originalColor = canvas.GetPixel(x, y);
+                    var paletteIndex = colorIndexLookup(originalColor);
+                    output.SetIndex(x, y, paletteIndex);
+                }
+            }
+            return output;
         }
 
         static IReadableCanvas CanvasFromFile(string path)

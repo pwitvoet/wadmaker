@@ -10,60 +10,12 @@ namespace WadMaker
     static class ColorQuantization
     {
         /// <summary>
-        /// Creates indexed canvases from the given canvases, by deriving a color palette from the colors in the given canvases.
-        /// All output canvases will share the same palette.
+        /// Creates a palette and a dictionary that maps input colors to their palette index.
         /// </summary>
-        public static IEnumerable<IIndexedCanvas> CreateIndexedCanvases(IEnumerable<IReadableCanvas> canvases, bool hasTransparency)
-        {
-            // First gather all the unique colors from the input canvases:
-            var inputCanvases = canvases.ToArray();
-            var uniqueColors = inputCanvases
-                .Select(CanvasExtensions.GetColorHistogram)
-                .SelectMany(histogram => histogram.Keys)
-                .ToHashSet();
-
-            if (hasTransparency)
-                uniqueColors.RemoveWhere(IsTransparent);
-
-
-            // Then create a suitable palette (if transparency is enabled, then the final palette slot will be reserved for transparent pixels):
-            (var palette, var paletteIndexLookup) = CreatePaletteAndIndexLookup(uniqueColors, hasTransparency ? 255 : 256);
-
-            if (palette.Length < 256)
-                palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
-
-            if (hasTransparency)
-                palette[255] = Color.FromArgb(0, 0, 255);   // Make the transparent color deep blue, by convention.
-
-
-            // Finally, convert the input canvases, applying the palette that was just created:
-            return inputCanvases
-                .Select(canvas =>
-                {
-                    var outputCanvas = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
-                    for (int y = 0; y < canvas.Height; y++)
-                    {
-                        for (int x = 0; x < canvas.Width; x++)
-                        {
-                            var color = canvas.GetPixel(x, y);
-                            var paletteIndex = (hasTransparency && IsTransparent(color)) ? 255 : paletteIndexLookup(color);
-                            outputCanvas.SetIndex(x, y, paletteIndex);
-                        }
-                    }
-                    return outputCanvas;
-                })
-                .ToArray();
-        }
-
-
-        /// <summary>
-        /// Creates a palette from the given color histogram, along with a lookup function that maps colors that occur in the histogram to a palette index.
-        /// This uses a median-cut algorithm.
-        /// </summary>
-        private static (Color[], Func<Color, int>) CreatePaletteAndIndexLookup(HashSet<Color> uniqueColors, int maxColors = 256)
+        public static (Color[], IDictionary<Color, int>) CreatePaletteAndColorIndexMapping(HashSet<Color> uniqueColors, int maxColors = 256, int volumeSelectionTreshold = 32)
         {
             if (uniqueColors.Count <= maxColors)
-                return CreatePaletteAndLookup(uniqueColors.ToDictionary(color => color, color => new[] { color }));
+                return CreatePaletteAndMapping(uniqueColors.ToDictionary(color => color, color => new[] { color }));
 
 
             var boundingBoxes = new List<ColorBoundingBox>();
@@ -71,7 +23,10 @@ namespace WadMaker
 
             while (boundingBoxes.Count < maxColors)
             {
-                var boundingBox = boundingBoxes.OrderByDescending(box => box.Colors.Length).First();
+                // Pick the first few bounding boxes based on color count alone, but start taking volume into account after a while,
+                // to give rarer (but notable) colors more of a chance:
+                var boundingBox = (boundingBoxes.Count < volumeSelectionTreshold) ? boundingBoxes.OrderByDescending(box => box.Colors.Length).First() :
+                                                                                    boundingBoxes.OrderByDescending(box => (long)box.Colors.Length * box.Volume).First();
                 if (boundingBox.Colors.Length <= 1)
                     break;
 
@@ -82,7 +37,7 @@ namespace WadMaker
                 var middleG = boundingBox.Min.G + sizeG / 2;
                 var middleB = boundingBox.Min.B + sizeB / 2;
                 var isLow = (sizeR >= sizeG && sizeR >= sizeB) ? (Func<Color, bool>)(c => c.R <= middleR) :
-                            (sizeG >= sizeB) ?                   (Func<Color, bool>)(c => c.G <= middleG) :
+                                          (sizeG >= sizeB) ?     (Func<Color, bool>)(c => c.G <= middleG) :
                                                                  (Func<Color, bool>)(c => c.B <= middleB);
 
                 var lowColors = new List<Color>();
@@ -95,29 +50,78 @@ namespace WadMaker
                 boundingBoxes.Add(new ColorBoundingBox(highColors));
             }
 
-            return CreatePaletteAndLookup(boundingBoxes.ToDictionary(box => box.GetAverageColor(), box => box.Colors));
+            return CreatePaletteAndMapping(boundingBoxes.ToDictionary(box => box.GetAverageColor(), box => box.Colors));
 
 
-            (Color[], Func<Color, int>) CreatePaletteAndLookup(IDictionary<Color, Color[]> colorMappings)
+            (Color[], IDictionary<Color, int>) CreatePaletteAndMapping(IDictionary<Color, Color[]> colorMappings)
             {
                 var palette = new Color[colorMappings.Count];
-                var indexLookup = new Dictionary<Color, int>();
+                var colorIndexMapping = new Dictionary<Color, int>();
 
                 var index = 0;
                 foreach (var kv in colorMappings)
                 {
                     palette[index] = kv.Key;
                     foreach (var color in kv.Value)
-                        indexLookup[color] = index;
+                        colorIndexMapping[color] = index;
 
                     index += 1;
                 }
 
-                return (palette, color => indexLookup[color]);
+                return (palette, colorIndexMapping);
             }
         }
 
-        private static bool IsTransparent(Color color) => color.A < 128;
+        /// <summary>
+        /// Creates a lookup function that, for a given color, returns the index of the nearest color in the palette.
+        /// Transparent colors are mapped to palette index 255.
+        /// NOTE: The given color index mapping dictionary is used for memoization, and will be modified (no internal copy is created for performance reasons).
+        /// </summary>
+        public static Func<Color, int> CreateColorIndexLookup(Color[] palette, IDictionary<Color, int> colorIndexMapping, Func<Color, bool> isTransparent)
+        {
+            return color =>
+            {
+                if (isTransparent(color))
+                    return 255;
+
+                if (colorIndexMapping.TryGetValue(color, out var index))
+                    return index;
+
+                index = GetNearestColorIndex(palette, color);
+                colorIndexMapping[color] = index;
+                return index;
+            };
+        }
+
+        /// <summary>
+        /// Returns the index of the palette color that is closest to the given color, in RGB-space.
+        /// </summary>
+        public static int GetNearestColorIndex(Color[] palette, Color color)
+        {
+            var index = 0;
+            var minSquaredDistance = float.MaxValue;
+            for (int i = 0; i < palette.Length; i++)
+            {
+                var squaredDistance = SquaredDistance(palette[i], color);
+                if (squaredDistance < minSquaredDistance)
+                {
+                    minSquaredDistance = squaredDistance;
+                    index = i;
+                }
+            }
+            return index;
+        }
+
+        public static bool IsTransparent(Color color) => color.A < 128;
+
+
+        private static float SquaredDistance(Color a, Color b)
+        {
+            var dr = a.R - b.R;
+            var dg = a.G - b.G;
+            var db = a.B - b.B;
+            return (dr * dr) + (dg * dg) + (db * db);
+        }
 
 
         private class ColorBoundingBox
@@ -125,6 +129,8 @@ namespace WadMaker
             public Color[] Colors { get; }
             public Color Min { get; }
             public Color Max { get; }
+
+            public int Volume => (Max.R - Min.R) * (Max.G - Min.G) * (Max.B - Min.B);
 
             public ColorBoundingBox(IEnumerable<Color> colors)
             {
