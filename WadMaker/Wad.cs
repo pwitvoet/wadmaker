@@ -116,7 +116,7 @@ namespace WadMaker
                     foreach (var color in texture.Palette)
                         stream.Write(color);
                 }
-                stream.Write(new byte[2]);  // Padding.
+                stream.Write(new byte[RequiredPadding(2 + texture.Palette.Length * 3, 4)]); // Padding.
             }
             else if (texture.Type == TextureType.Font)
             {
@@ -135,7 +135,7 @@ namespace WadMaker
                 stream.Write((ushort)texture.Palette.Length);
                 foreach (var color in texture.Palette)
                     stream.Write(color);
-                stream.Write(new byte[2]);  // Padding.
+                stream.Write(new byte[RequiredPadding(2 + texture.Palette.Length * 3, 4)]); // Padding.
             }
             else if (texture.Type == TextureType.SimpleTexture)
             {
@@ -146,7 +146,7 @@ namespace WadMaker
                 stream.Write((ushort)texture.Palette.Length);
                 foreach (var color in texture.Palette)
                     stream.Write(color);
-                stream.Write(new byte[2]);  // Padding.
+                stream.Write(new byte[RequiredPadding(2 + texture.Palette.Length * 3, 4)]); // Padding.
             }
             else
             {
@@ -200,7 +200,6 @@ namespace WadMaker
                 var palette = Enumerable.Range(0, paletteSize)
                     .Select(i => stream.ReadColor())
                     .ToArray();
-                stream.ReadBytes(2);    // Padding.
 
                 return Texture.CreateMipmapTexture(name, width, height, imageData, palette, mipmap1Data, mipmap2Data, mipmap3Data);
             }
@@ -220,7 +219,6 @@ namespace WadMaker
                 var palette = Enumerable.Range(0, paletteSize)
                     .Select(i => stream.ReadColor())
                     .ToArray();
-                stream.ReadBytes(2);    // Padding.
 
                 return Texture.CreateFont(lump.Name, width, height, rowCount, rowHeight, charInfos, imageData, palette);
             }
@@ -234,7 +232,6 @@ namespace WadMaker
                 var palette = Enumerable.Range(0, paletteSize)
                     .Select(i => stream.ReadColor())
                     .ToArray();
-                stream.ReadBytes(2);    // Padding.
 
                 return Texture.CreateSimpleTexture(lump.Name, width, height, imageData, palette);
             }
@@ -253,8 +250,9 @@ namespace WadMaker
                 size += texture.Mipmap1Data.Length;
                 size += texture.Mipmap2Data.Length;
                 size += texture.Mipmap3Data.Length;
+                size += 2;
                 size += texture.Palette.Length * 3;
-                size += 4;
+                size += RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else if (texture.Type == TextureType.Font)
@@ -262,22 +260,30 @@ namespace WadMaker
                 var size = 16;
                 size += texture.CharInfos.Length * 4;
                 size += texture.ImageData.Length;
+                size += 2;
                 size += texture.Palette.Length * 3;
-                size += 4;
+                size += RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else if (texture.Type == TextureType.SimpleTexture)
             {
                 var size = 8;
                 size += texture.ImageData.Length;
+                size += 2;
                 size += texture.Palette.Length * 3;
-                size += 4;
+                size += RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else
             {
                 throw new NotSupportedException($"Texture type {texture.Type} is not supported.");
             }
+        }
+
+        private static int RequiredPadding(int length, int padToMultipleOf)
+        {
+            var excess = length % padToMultipleOf;
+            return excess == 0 ? 0 : padToMultipleOf - excess;
         }
 
 
