@@ -139,5 +139,24 @@ namespace WadMaker.Drawing
             }
             return histogram;
         }
+
+        public static Color GetAverageColor(this IReadableCanvas canvas)
+        {
+            long r = 0;
+            long g = 0;
+            long b = 0;
+            for (int y = 0; y < canvas.Height; y++)
+            {
+                for (int x = 0; x < canvas.Width; x++)
+                {
+                    var color = canvas.GetPixel(x, y);
+                    r += color.R;
+                    g += color.G;
+                    b += color.B;
+                }
+            }
+            var pixelCount = canvas.Width * canvas.Height;
+            return Color.FromArgb((int)(r / pixelCount), (int)(g / pixelCount), (int)(b / pixelCount));
+        }
     }
 }

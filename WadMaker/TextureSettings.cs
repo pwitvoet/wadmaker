@@ -1,4 +1,5 @@
-﻿
+﻿using System.Drawing;
+
 namespace WadMaker
 {
     class TextureSettings
@@ -30,5 +31,17 @@ namespace WadMaker
         /// This only affects Floyd-Steinberg dithering. Defaults to 255.
         /// </summary>
         public int? MaxErrorDiffusion { get; set; }
+
+        /// <summary>
+        /// Water fog color.
+        /// Defaults to the image's average color.
+        /// </summary>
+        public Color? WaterFogColor { get; set; }
+
+        /// <summary>
+        /// Water fog intensity. Ranges from 0 (low intensity, increased view distance) to 255 (high intensity, reduced view distance).
+        /// Defaults to the inverse of the water fog color's brightness.
+        /// </summary>
+        public int? WaterFogIntensity { get; set; }
     }
 }

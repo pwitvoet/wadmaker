@@ -341,12 +341,13 @@ namespace WadMaker
                 .Select(mipmapPath => File.Exists(mipmapPath) ? CanvasFromFile(mipmapPath) : null)
                 .ToArray();
 
-
-            // Create the palette (also taking the mipmaps into account, because they'll be sharing the palette):
+            // Are we dealing with a special texture (transparency, animation, water)?
             var filename = Path.GetFileName(path);
             var isTransparentTexture = filename.StartsWith("{");
             var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(filename);
+            var isWaterTexture = filename.StartsWith('!');
 
+            // Determine unique colors:
             var canvases = mipmapCanvases
                 .Prepend(imageCanvas)
                 .ToArray();
@@ -358,16 +359,35 @@ namespace WadMaker
             if (isTransparentTexture)
                 uniqueColors.RemoveWhere(color => color.A < 128);
 
+            // Create the palette (also taking the mipmaps into account, because they'll be sharing the palette):
             (var palette, var colorIndexMapping) = ColorQuantization.CreatePaletteAndColorIndexMapping(
                 uniqueColors,
-                isTransparentTexture ? 255 : 256,
+                isWaterTexture ? 254 : isTransparentTexture ? 255 : 256,
                 textureSettings.QuantizationVolumeSelectionTreshold ?? 32);
 
             if (palette.Length < 256)
                 palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
 
+            // Palette handling for special textures:
             if (isTransparentTexture)
                 palette[255] = Color.FromArgb(0, 0, 255);   // Make the transparent color deep blue, by convention.
+
+            if (isWaterTexture)
+            {
+                // Fog color and intensity are stored in palette slots 3 and 4, so we'll have to move the colors at those slots:
+                palette[254] = palette[3];
+                palette[255] = palette[4];
+
+                palette[3] = textureSettings.WaterFogColor ?? imageCanvas.GetAverageColor();
+                palette[4] = Color.FromArgb(Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - palette[3].GetBrightness()) * 255), 0, 255), 0, 0);
+
+                var affectedColors = colorIndexMapping
+                    .Where(kv => kv.Value == 3 || kv.Value == 4)
+                    .Select(kv => kv.Key)
+                    .ToArray();
+                foreach (var color in affectedColors)
+                    colorIndexMapping[color] += 251;
+            }
 
 
             // Finally, apply the palette (optionally using a dithering algorithm):
