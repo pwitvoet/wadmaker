@@ -37,7 +37,7 @@ namespace WadMaker
                 var settings = ParseArguments(args);
                 if (settings.Extract)
                 {
-                    ExtractWad(settings.WadPath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
+                    ExtractTextures(settings.WadPath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
                 }
                 else
                 {
@@ -104,16 +104,21 @@ namespace WadMaker
         // TODO: What if dir already exists? ...ask to overwrite files? maybe add a -force cmd flag?
         // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
         //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
-        static void ExtractWad(string inputWadPath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles)
+        static void ExtractTextures(string inputWadPath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles)
         {
             var stopwatch = Stopwatch.StartNew();
 
             var imageFilesCreated = 0;
 
-            var wad = Wad.Load(inputWadPath);
+            var textures = new List<Texture>();
+            if (inputWadPath.EndsWith(".bsp"))
+                textures = Bsp.GetEmbeddedTextures(inputWadPath);
+            else
+                textures = Wad.Load(inputWadPath).Textures;
+
             Directory.CreateDirectory(outputDirectory);
 
-            foreach (var texture in wad.Textures)
+            foreach (var texture in textures)
             {
                 var maxMipmap = extractMipmaps ? 4 : 1;
                 for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
@@ -140,7 +145,7 @@ namespace WadMaker
                 }
             }
 
-            Console.WriteLine($"Extracted {imageFilesCreated} images from {wad.Textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Console.WriteLine($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         // TODO: Add support for more image file formats!
