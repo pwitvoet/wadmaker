@@ -13,13 +13,18 @@ namespace WadMaker
 {
     class Settings
     {
-        public bool FullRebuild { get; set; }               // -full: forces a full rebuild instead of an incremental one
-        public bool Extract { get; set; }                   // -extract: extracts textures from a wad file instead of building a wad file
-        public bool ExtractMipmaps { get; set; }            // -mipmaps: also extracts mipmaps
-        public bool OverwriteExistingFiles { get; set; }    // -overwrite: extract mode only, enables overwriting of existing image files (off by default)
+        // Build settings:
+        public bool FullRebuild { get; set; }               // -full:       forces a full rebuild instead of an incremental one
+        public bool IncludeSubDirectories { get; set; }     // -subdirs:    also include images in sub-directories
 
+        // Extract settings:
+        public bool Extract { get; set; }                   //              Texture extraction mode is enabled when the first argument (path) is a wad or bsp file.
+        public bool ExtractMipmaps { get; set; }            // -mipmaps:    also extract mipmaps
+        public bool OverwriteExistingFiles { get; set; }    // -overwrite:  extract mode only, enables overwriting of existing image files (off by default)
+
+        // Other settings:
         public string InputDirectory { get; set; }          // Build mode only
-        public string WadPath { get; set; }                 // Wad path (output in build mode, input in extract mode).
+        public string FilePath { get; set; }                // Wad or bsp path (output in build mode, input in extract mode).
         public string OutputDirectory { get; set; }         // Extract mode only
     }
 
@@ -37,11 +42,11 @@ namespace WadMaker
                 var settings = ParseArguments(args);
                 if (settings.Extract)
                 {
-                    ExtractTextures(settings.WadPath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
+                    ExtractTextures(settings.FilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
                 }
                 else
                 {
-                    MakeWad(settings.InputDirectory, settings.WadPath, settings.FullRebuild);
+                    MakeWad(settings.InputDirectory, settings.FilePath, settings.FullRebuild, settings.IncludeSubDirectories);
                 }
             }
             catch (Exception ex)
@@ -56,6 +61,7 @@ namespace WadMaker
         {
             var settings = new Settings();
 
+            // First parse options:
             var index = 0;
             while (index < args.Length && args[index].StartsWith('-'))
             {
@@ -63,39 +69,42 @@ namespace WadMaker
                 switch (arg)
                 {
                     case "-full": settings.FullRebuild = true; break;
-                    case "-extract": settings.Extract = true; break;
+                    case "-subdirs": settings.IncludeSubDirectories = true; break;
                     case "-mipmaps": settings.ExtractMipmaps = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
                     default: throw new ArgumentException($"Unknown argument: '{arg}'.");
                 }
             }
 
+            // Then handle arguments (paths):
+            var paths = args.Skip(index).ToArray();
+            if (paths.Length == 0)
+                throw new ArgumentException("Missing input folder (for wad building) or file (for texture extraction) argument.");
+
+            if (paths[0].EndsWith(".wad") || paths[0].EndsWith(".bsp"))
+                settings.Extract = true;
+
+
             if (settings.Extract)
             {
-                if (index < args.Length)
-                    settings.WadPath = args[index++];
-                else
-                    throw new ArgumentException("Missing input wad argument.");
+                settings.FilePath = args[index++];
 
                 if (index < args.Length)
                     settings.OutputDirectory = args[index++];
                 else
-                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.WadPath), Path.GetFileNameWithoutExtension(settings.WadPath));
+                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.FilePath), Path.GetFileNameWithoutExtension(settings.FilePath));
             }
             else
             {
-                if (index < args.Length)
-                    settings.InputDirectory = args[index++];
-                else
-                    throw new ArgumentException("Missing input directory argument.");
+                settings.InputDirectory = args[index++];
 
                 if (index < args.Length)
-                    settings.WadPath = args[index++];
+                    settings.FilePath = args[index++];
                 else
-                    settings.WadPath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
+                    settings.FilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
 
-                if (!Path.IsPathRooted(settings.WadPath))
-                    settings.WadPath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), settings.WadPath);
+                if (!Path.IsPathRooted(settings.FilePath))
+                    settings.FilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), settings.FilePath);
             }
 
             return settings;
@@ -104,17 +113,17 @@ namespace WadMaker
         // TODO: What if dir already exists? ...ask to overwrite files? maybe add a -force cmd flag?
         // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
         //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
-        static void ExtractTextures(string inputWadPath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles)
+        static void ExtractTextures(string inputFilePath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles)
         {
             var stopwatch = Stopwatch.StartNew();
 
             var imageFilesCreated = 0;
 
             var textures = new List<Texture>();
-            if (inputWadPath.EndsWith(".bsp"))
-                textures = Bsp.GetEmbeddedTextures(inputWadPath);
+            if (inputFilePath.EndsWith(".bsp"))
+                textures = Bsp.GetEmbeddedTextures(inputFilePath);
             else
-                textures = Wad.Load(inputWadPath).Textures;
+                textures = Wad.Load(inputFilePath).Textures;
 
             Directory.CreateDirectory(outputDirectory);
 
@@ -145,11 +154,11 @@ namespace WadMaker
                 }
             }
 
-            Console.WriteLine($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputWadPath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Console.WriteLine($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputFilePath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         // TODO: Add support for more image file formats!
-        static void MakeWad(string inputDirectory, string outputWadPath, bool fullRebuild)
+        static void MakeWad(string inputDirectory, string outputFilePath, bool fullRebuild, bool includeSubDirectories)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -157,14 +166,14 @@ namespace WadMaker
             var texturesUpdated = 0;
             var texturesRemoved = 0;
 
-            var updateExistingWad = !fullRebuild && File.Exists(outputWadPath);
-            var wad = updateExistingWad ? Wad.Load(outputWadPath) : new Wad();
-            var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputWadPath).LastWriteTimeUtc : (DateTime?)null;
+            var updateExistingWad = !fullRebuild && File.Exists(outputFilePath);
+            var wad = updateExistingWad ? Wad.Load(outputFilePath) : new Wad();
+            var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputFilePath).LastWriteTimeUtc : (DateTime?)null;
             var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
 
             // Multiple files can map to the same texture, due to different extensions and upper/lower-case differences.
             // We'll group files by texture name, to make these collisions easy to detect:
-            var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory).ToHashSet();
+            var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*", includeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToHashSet();
             var textureImagePaths = allInputDirectoryFiles
                 .Where(IsSupportedFiletype)
                 .Where(path => !path.Contains(".mipmap"))
@@ -265,12 +274,12 @@ namespace WadMaker
             }
 
             // Finally, save the wad file:
-            wad.Save(outputWadPath);
+            wad.Save(outputFilePath);
 
             if (updateExistingWad)
-                Console.WriteLine($"Updated {outputWadPath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Console.WriteLine($"Updated {outputFilePath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
             else
-                Console.WriteLine($"Created {outputWadPath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Console.WriteLine($"Created {outputFilePath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
 
