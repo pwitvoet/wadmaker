@@ -329,8 +329,8 @@ namespace WadMaker
 
 
         // Wad making:
-        // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, spaces, parenthesis, etc.?)
-        static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256);
+        // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, parenthesis, etc.?)
+        static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256 && c != ' ');
 
         static bool IsSupportedFiletype(string path)
         {
@@ -362,22 +362,23 @@ namespace WadMaker
             var isWaterTexture = filename.StartsWith('!');
 
             // Determine unique colors:
-            var canvases = mipmapCanvases
+            var inputCanvases = mipmapCanvases
                 .Prepend(imageCanvas)
                 .ToArray();
-            var uniqueColors = canvases
+            var uniqueColors = inputCanvases
                 .Where(canvas => canvas != null)
                 .SelectMany(canvas => canvas.GetColorHistogram().Keys)
                 .ToHashSet();
 
+            var transparencyThreshold = textureSettings.TransparencyThreshold ?? (isTransparentTexture ? 128 : 0);
             if (isTransparentTexture)
-                uniqueColors.RemoveWhere(color => color.A < 128);
+                uniqueColors.RemoveWhere(color => color.A < transparencyThreshold);
 
             // Create the palette (also taking the mipmaps into account, because they'll be sharing the palette):
             (var palette, var colorIndexMapping) = ColorQuantization.CreatePaletteAndColorIndexMapping(
                 uniqueColors,
                 isWaterTexture ? 254 : isTransparentTexture ? 255 : 256,
-                textureSettings.QuantizationVolumeSelectionTreshold ?? 32);
+                textureSettings.QuantizationVolumeSelectionThreshold ?? 32);
 
             if (palette.Length < 256)
                 palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
@@ -404,11 +405,12 @@ namespace WadMaker
             }
 
 
-            // Finally, apply the palette (optionally using a dithering algorithm):
-            var transparencyTreshold = textureSettings.TransparencyTreshold ?? (isTransparentTexture ? 128 : 0);
-            var colorIndexLookup = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMapping, color => color.A < transparencyTreshold);
-            var resultCanvases = canvases
-                .Select(canvas => (canvas != null) ? ApplyPalette(canvas, palette, colorIndexLookup, textureSettings, isAnimatedTexture) : null)
+            // Finally, apply the palette (optionally using a dithering algorithm).
+            // Dithering is disabled for animated textures, in order to reduce 'flickering' artifacts.
+            // It's currently also disabled for transparent textures (the dithering algorithm would need to be modified to skip transparent pixels):
+            var colorIndexLookup = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMapping, color => color.A < transparencyThreshold);
+            var resultCanvases = inputCanvases
+                .Select(canvas => (canvas != null) ? ApplyPalette(canvas, palette, colorIndexLookup, textureSettings, isAnimatedTexture || isTransparentTexture) : null)
                 .ToArray();
 
             return Texture.CreateMipmapTexture(
@@ -423,10 +425,9 @@ namespace WadMaker
         }
 
         // TODO: Without dithering there's still some potential for flickering, due to the palette being different!
-        static IIndexedCanvas ApplyPalette(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup, TextureSettings textureSettings, bool isAnimatedTexture)
+        static IIndexedCanvas ApplyPalette(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup, TextureSettings textureSettings, bool noDithering)
         {
-            // Do not apply dithering to animated textures, unless specifically requested, to avoid 'flickering':
-            var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (isAnimatedTexture ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
+            var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (noDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             switch (ditheringAlgorithm)
             {
                 default:

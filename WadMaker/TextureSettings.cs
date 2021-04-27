@@ -10,7 +10,7 @@ namespace WadMaker
         /// to give rarer but still notable colors more chance.
         /// Defaults to 32.
         /// </summary>
-        public int? QuantizationVolumeSelectionTreshold { get; set; }
+        public int? QuantizationVolumeSelectionThreshold { get; set; }
 
         /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed texture.
@@ -24,7 +24,7 @@ namespace WadMaker
         /// For color-keyed textures (whose name must start with a '{'), they will be mapped to the last color in the palette.
         /// Defaults to 128 for transparent textures, and to 0 for all other textures.
         /// </summary>
-        public int? TransparencyTreshold { get; set; }
+        public int? TransparencyThreshold { get; set; }
 
         /// <summary>
         /// The maximum amount of error that can be accumulated per channel.

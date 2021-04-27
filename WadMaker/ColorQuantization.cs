@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Linq;
-using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -12,7 +10,7 @@ namespace WadMaker
         /// <summary>
         /// Creates a palette and a dictionary that maps input colors to their palette index.
         /// </summary>
-        public static (Color[], IDictionary<Color, int>) CreatePaletteAndColorIndexMapping(HashSet<Color> uniqueColors, int maxColors = 256, int volumeSelectionTreshold = 32)
+        public static (Color[], IDictionary<Color, int>) CreatePaletteAndColorIndexMapping(HashSet<Color> uniqueColors, int maxColors = 256, int volumeSelectionThreshold = 32)
         {
             if (uniqueColors.Count <= maxColors)
                 return CreatePaletteAndMapping(uniqueColors.ToDictionary(color => color, color => new[] { color }));
@@ -25,7 +23,7 @@ namespace WadMaker
             {
                 // Pick the first few bounding boxes based on color count alone, but start taking volume into account after a while,
                 // to give rarer (but notable) colors more of a chance:
-                var boundingBox = (boundingBoxes.Count < volumeSelectionTreshold) ? boundingBoxes.OrderByDescending(box => box.Colors.Length).First() :
+                var boundingBox = (boundingBoxes.Count < volumeSelectionThreshold) ? boundingBoxes.OrderByDescending(box => box.Colors.Length).First() :
                                                                                     boundingBoxes.OrderByDescending(box => (long)box.Colors.Length * box.Volume).First();
                 if (boundingBox.Colors.Length <= 1)
                     break;
