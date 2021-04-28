@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -10,8 +11,9 @@ namespace WadMaker
         /// <summary>
         /// Creates a palette and a dictionary that maps input colors to their palette index.
         /// </summary>
-        public static (Color[], IDictionary<Color, int>) CreatePaletteAndColorIndexMapping(HashSet<Color> uniqueColors, int maxColors = 256, int volumeSelectionThreshold = 32)
+        public static (Color[], IDictionary<Color, int>) CreatePaletteAndColorIndexMapping(IDictionary<Color, int> colorHistogram, int maxColors = 256, int volumeSelectionThreshold = 32)
         {
+            var uniqueColors = colorHistogram.Keys.ToHashSet();
             if (uniqueColors.Count <= maxColors)
                 return CreatePaletteAndMapping(uniqueColors.ToDictionary(color => color, color => new[] { color }));
 
@@ -48,7 +50,7 @@ namespace WadMaker
                 boundingBoxes.Add(new ColorBoundingBox(highColors));
             }
 
-            return CreatePaletteAndMapping(boundingBoxes.ToDictionary(box => box.GetAverageColor(), box => box.Colors));
+            return CreatePaletteAndMapping(boundingBoxes.ToDictionary(box => box.GetWeightedAverageColor(colorHistogram), box => box.Colors));
 
 
             (Color[], IDictionary<Color, int>) CreatePaletteAndMapping(IDictionary<Color, Color[]> colorMappings)
@@ -110,7 +112,31 @@ namespace WadMaker
             return index;
         }
 
-        public static bool IsTransparent(Color color) => color.A < 128;
+
+        /// <summary>
+        /// Returns the counts of all colors that are used in the given canvases.
+        /// </summary>
+        public static IDictionary<Color, int> GetColorHistogram(IEnumerable<IReadableCanvas> canvases, Func<Color, bool> skipColor = null)
+        {
+            var histogram = new Dictionary<Color, int>();
+            foreach (var canvas in canvases)
+            {
+                for (int y = 0; y < canvas.Height; y++)
+                {
+                    for (int x = 0; x < canvas.Width; x++)
+                    {
+                        var color = canvas.GetPixel(x, y);
+                        if (skipColor?.Invoke(color) == true)
+                            continue;
+
+                        if (!histogram.TryGetValue(color, out var count))
+                            count = 0;
+                        histogram[color] = count + 1;
+                    }
+                }
+            }
+            return histogram;
+        }
 
 
         private static float SquaredDistance(Color a, Color b)
@@ -139,18 +165,23 @@ namespace WadMaker
                 (Min, Max) = GetMinMaxColors(Colors);
             }
 
-            public Color GetAverageColor()
+            public Color GetWeightedAverageColor(IDictionary<Color, int> colorHistogram)
             {
                 long r = 0;
                 long g = 0;
                 long b = 0;
+                long totalWeight = 0;
                 foreach (var color in Colors)
                 {
-                    r += color.R;
-                    g += color.G;
-                    b += color.B;
+                    if (colorHistogram.TryGetValue(color, out var weight))
+                    {
+                        r += color.R * weight;
+                        g += color.G * weight;
+                        b += color.B * weight;
+                        totalWeight += weight;
+                    }
                 }
-                return Color.FromArgb((byte)(r / Colors.Length), (byte)(g / Colors.Length), (byte)(b / Colors.Length));
+                return Color.FromArgb((byte)(r / totalWeight), (byte)(g / totalWeight), (byte)(b / totalWeight));
             }
 
 

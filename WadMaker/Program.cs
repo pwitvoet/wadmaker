@@ -361,22 +361,17 @@ namespace WadMaker
             var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(filename);
             var isWaterTexture = filename.StartsWith('!');
 
-            // Determine unique colors:
+            // Create a (combined) color histogram for all of our input images:
             var inputCanvases = mipmapCanvases
                 .Prepend(imageCanvas)
                 .ToArray();
-            var uniqueColors = inputCanvases
-                .Where(canvas => canvas != null)
-                .SelectMany(canvas => canvas.GetColorHistogram().Keys)
-                .ToHashSet();
 
             var transparencyThreshold = textureSettings.TransparencyThreshold ?? (isTransparentTexture ? 128 : 0);
-            if (isTransparentTexture)
-                uniqueColors.RemoveWhere(color => color.A < transparencyThreshold);
+            var colorHistogram = ColorQuantization.GetColorHistogram(inputCanvases.Where(canvas => canvas != null), color => color.A < transparencyThreshold);
 
             // Create the palette (also taking the mipmaps into account, because they'll be sharing the palette):
             (var palette, var colorIndexMapping) = ColorQuantization.CreatePaletteAndColorIndexMapping(
-                uniqueColors,
+                colorHistogram,
                 isWaterTexture ? 254 : isTransparentTexture ? 255 : 256,
                 textureSettings.QuantizationVolumeSelectionThreshold ?? 32);
 
@@ -396,6 +391,7 @@ namespace WadMaker
                 palette[3] = textureSettings.WaterFogColor ?? imageCanvas.GetAverageColor();
                 palette[4] = Color.FromArgb(Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - palette[3].GetBrightness()) * 255), 0, 255), 0, 0);
 
+                // Also update image data:
                 var affectedColors = colorIndexMapping
                     .Where(kv => kv.Value == 3 || kv.Value == 4)
                     .Select(kv => kv.Key)
