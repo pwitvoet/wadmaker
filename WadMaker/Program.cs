@@ -406,7 +406,19 @@ namespace WadMaker
             // It's currently also disabled for transparent textures (the dithering algorithm would need to be modified to skip transparent pixels):
             var colorIndexLookup = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMapping, color => color.A < transparencyThreshold);
             var resultCanvases = inputCanvases
-                .Select(canvas => (canvas != null) ? ApplyPalette(canvas, palette, colorIndexLookup, textureSettings, isAnimatedTexture || isTransparentTexture) : null)
+                .Select(canvas =>
+                {
+                    if (canvas == null)
+                        return null;
+
+                    return ApplyPalette(
+                        canvas,
+                        palette,
+                        colorIndexLookup,
+                        textureSettings,
+                        noDithering: isAnimatedTexture,
+                        skipDithering: color => color.A < transparencyThreshold);
+                })
                 .ToArray();
 
             return Texture.CreateMipmapTexture(
@@ -421,7 +433,13 @@ namespace WadMaker
         }
 
         // TODO: Without dithering there's still some potential for flickering, due to the palette being different!
-        static IIndexedCanvas ApplyPalette(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup, TextureSettings textureSettings, bool noDithering)
+        static IIndexedCanvas ApplyPalette(
+            IReadableCanvas canvas,
+            Color[] palette,
+            Func<Color, int> colorIndexLookup,
+            TextureSettings textureSettings,
+            bool noDithering,
+            Func<Color, bool> skipDithering = null)
         {
             var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (noDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             switch (ditheringAlgorithm)
@@ -431,7 +449,7 @@ namespace WadMaker
                     return ApplyPaletteWithoutDithering(canvas, palette, colorIndexLookup);
 
                 case DitheringAlgorithm.FloydSteinberg:
-                    return Dithering.FloydSteinberg(canvas, palette, colorIndexLookup, textureSettings.MaxErrorDiffusion ?? 255);
+                    return Dithering.FloydSteinberg(canvas, palette, colorIndexLookup, textureSettings.MaxErrorDiffusion ?? 255, skipDithering);
             }
         }
 

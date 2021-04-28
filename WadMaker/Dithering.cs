@@ -18,8 +18,14 @@ namespace WadMaker
         /// <summary>
         /// Uses Floyd-Steinberg dithering to create an 8-bit indexed canvas from the input canvas and the given palette.
         /// Error diffusion can be limited to make the dithering effect more subtle.
+        /// An optional predicate can be provided to skip dithering for certain colors, which can be used to prevent error diffusion from interfering with color-key transparency.
         /// </summary>
-        public static IIndexedCanvas FloydSteinberg(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup, int maxErrorDiffusion = 255)
+        public static IIndexedCanvas FloydSteinberg(
+            IReadableCanvas canvas,
+            Color[] palette,
+            Func<Color, int> colorIndexLookup,
+            int maxErrorDiffusion = 255,
+            Func<Color, bool> skipDithering = null)
         {
             var output = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
 
@@ -29,6 +35,16 @@ namespace WadMaker
             {
                 for (int x = 0; x < canvas.Width; x++)
                 {
+                    var sourceColor = canvas.GetPixel(x, y);
+                    if (skipDithering?.Invoke(sourceColor) == true)
+                    {
+                        currentRowErrors[x, 0] = 0;
+                        currentRowErrors[x, 1] = 0;
+                        currentRowErrors[x, 2] = 0;
+                        output.SetIndex(x, y, colorIndexLookup(sourceColor));
+                        continue;
+                    }
+
                     // Error diffusion:
                     // 1/16  |  5/16  |  3/16
                     // 7/16  | (x, y) |
@@ -50,7 +66,6 @@ namespace WadMaker
                         }
                     }
 
-                    var sourceColor = canvas.GetPixel(x, y);
                     var errorCorrectedColor = Color.FromArgb(
                         Math.Max(0, Math.Min(sourceColor.R + (int)error[0], 255)),
                         Math.Max(0, Math.Min(sourceColor.G + (int)error[1], 255)),
