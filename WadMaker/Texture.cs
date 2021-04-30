@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
+using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -26,7 +26,7 @@ namespace WadMaker
     /// </summary>
     public class Texture
     {
-        public static Texture CreateMipmapTexture(string name, int width, int height, byte[] imageData = null, IEnumerable<Color> palette = null, byte[] mipmap1Data = null, byte[] mipmap2Data = null, byte[] mipmap3Data = null)
+        public static Texture CreateMipmapTexture(string name, int width, int height, byte[] imageData = null, IEnumerable<ColorARGB> palette = null, byte[] mipmap1Data = null, byte[] mipmap2Data = null, byte[] mipmap3Data = null)
         {
             if (width < 0 || height < 0) throw new ArgumentException("Width and height must be positive.");
             if (width % 16 != 0 || height % 16 != 0) throw new ArgumentException("Width and height must be multiples of 16.");
@@ -36,23 +36,23 @@ namespace WadMaker
             if (mipmap3Data?.Length != width * height / 64) throw new ArgumentException("Mipmap 3 data must be 'width/8 x height/8' bytes.", nameof(mipmap3Data));
             if (palette?.Count() > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
 
-            return new Texture(TextureType.MipmapTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Color[256]) {
+            return new Texture(TextureType.MipmapTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new ColorARGB[256]) {
                 Mipmap1Data = mipmap1Data ?? new byte[width * height / 4],
                 Mipmap2Data = mipmap2Data ?? new byte[width * height / 16],
                 Mipmap3Data = mipmap3Data ?? new byte[width * height / 64],
             };
         }
 
-        public static Texture CreateSimpleTexture(string name, int width, int height, byte[] imageData = null, IEnumerable<Color> palette = null)
+        public static Texture CreateSimpleTexture(string name, int width, int height, byte[] imageData = null, IEnumerable<ColorARGB> palette = null)
         {
             if (width < 1 || height < 1) throw new ArgumentException("Width and height must be greater than zero.");
             if (imageData?.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
             if (palette?.Count() > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
 
-            return new Texture(TextureType.SimpleTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Color[256]);
+            return new Texture(TextureType.SimpleTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new ColorARGB[256]);
         }
 
-        public static Texture CreateFont(string name, int width, int height, int rowCount, int rowHeight, IEnumerable<CharInfo> charInfos = null, byte[] imageData = null, IEnumerable<Color> palette = null)
+        public static Texture CreateFont(string name, int width, int height, int rowCount, int rowHeight, IEnumerable<CharInfo> charInfos = null, byte[] imageData = null, IEnumerable<ColorARGB> palette = null)
         {
             if (width != 256) throw new ArgumentException("Width must be 256.", nameof(width));
             if (height < 1) throw new ArgumentException("Height must be greater than zero.", nameof(height));
@@ -62,7 +62,7 @@ namespace WadMaker
             if (imageData?.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
             if (palette?.Count() > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
 
-            return new Texture(TextureType.Font, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Color[256]) {
+            return new Texture(TextureType.Font, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new ColorARGB[256]) {
                 RowCount = rowCount,
                 RowHeight = rowHeight,
                 CharInfos = charInfos?.ToArray() ?? new CharInfo[256],
@@ -88,10 +88,10 @@ namespace WadMaker
         public CharInfo[] CharInfos { get; private set;  }
 
         // Texture and Font only:
-        public Color[] Palette { get; }
+        public ColorARGB[] Palette { get; }
 
 
-        private Texture(TextureType type, string name, int width, int height, byte[] imageData, Color[] palette)
+        private Texture(TextureType type, string name, int width, int height, byte[] imageData, ColorARGB[] palette)
         {
             Type = type;
             Name = name;

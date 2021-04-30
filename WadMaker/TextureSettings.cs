@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+﻿using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -39,7 +39,7 @@ namespace WadMaker
         /// Water fog color.
         /// Defaults to the image's average color.
         /// </summary>
-        public Color? WaterFogColor { get; set; }
+        public ColorARGB? WaterFogColor { get; set; }
 
         /// <summary>
         /// Water fog intensity. Ranges from 0 (low intensity, increased view distance) to 255 (high intensity, reduced view distance).

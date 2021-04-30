@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Drawing;
 using System.IO;
 using System.Text;
+using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -39,10 +39,10 @@ namespace WadMaker
         }
 
 
-        public static Color ReadColor(this Stream stream)
+        public static ColorARGB ReadColor(this Stream stream)
         {
             var data = stream.ReadBytes(3);
-            return Color.FromArgb(data[0], data[1], data[2]);
+            return new ColorARGB(data[0], data[1], data[2]);
         }
 
         #endregion
@@ -73,7 +73,7 @@ namespace WadMaker
         public static void Write(this Stream stream, byte[] bytes) => stream.Write(bytes, 0, bytes.Length);
 
 
-        public static void Write(this Stream stream, Color value) => stream.Write(new byte[] { value.R, value.G, value.B });
+        public static void Write(this Stream stream, ColorARGB value) => stream.Write(new byte[] { value.R, value.G, value.B });
 
         #endregion
     }

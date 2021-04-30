@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-using System.Drawing.Imaging;
+﻿using System.Drawing.Imaging;
 
 namespace WadMaker.Drawing
 {
@@ -15,7 +14,7 @@ namespace WadMaker.Drawing
         /// <summary>
         /// Returns the color of the pixel at the given coordinates.
         /// </summary>
-        Color GetPixel(int x, int y);
+        ColorARGB GetPixel(int x, int y);
 
         /// <summary>
         /// Copies the contents of this canvas to another canvas.

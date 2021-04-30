@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
@@ -96,7 +95,13 @@ namespace WadMaker.Drawing
                     Array.Copy(indexedCanvas.Palette, destination.Palette.Entries, indexedCanvas.Palette.Length);
 
                     var buffer = new byte[bitmapData.Stride * bitmapData.Height];
-                    var destinationCanvas = IndexedCanvas.Create(destination.Width, destination.Height, destination.PixelFormat, destination.Palette.Entries, buffer, bitmapData.Stride);
+                    var destinationCanvas = IndexedCanvas.Create(
+                        destination.Width,
+                        destination.Height,
+                        destination.PixelFormat,
+                        destination.Palette.Entries.Select(color => new ColorARGB(color.A, color.R, color.G, color.B)).ToArray(),
+                        buffer,
+                        bitmapData.Stride);
                     if (!(destinationCanvas is IBufferCanvas))
                         throw new InvalidProgramException($"{nameof(IndexedCanvas)}.{nameof(IndexedCanvas.Create)} must produce an {nameof(IIndexedCanvas)}!");
 
@@ -121,7 +126,7 @@ namespace WadMaker.Drawing
         }
 
 
-        public static Color GetAverageColor(this IReadableCanvas canvas)
+        public static ColorARGB GetAverageColor(this IReadableCanvas canvas)
         {
             long r = 0;
             long g = 0;
@@ -137,7 +142,7 @@ namespace WadMaker.Drawing
                 }
             }
             var pixelCount = canvas.Width * canvas.Height;
-            return Color.FromArgb((int)(r / pixelCount), (int)(g / pixelCount), (int)(b / pixelCount));
+            return new ColorARGB((byte)(r / pixelCount), (byte)(g / pixelCount), (byte)(b / pixelCount));
         }
     }
 }

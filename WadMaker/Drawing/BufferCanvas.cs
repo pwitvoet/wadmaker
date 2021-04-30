@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Drawing;
 using System.Drawing.Imaging;
 
 namespace WadMaker.Drawing
@@ -27,7 +26,7 @@ namespace WadMaker.Drawing
         }
 
 
-        public abstract Color GetPixel(int x, int y);
+        public abstract ColorARGB GetPixel(int x, int y);
 
         public virtual void CopyTo(ICanvas destination)
         {

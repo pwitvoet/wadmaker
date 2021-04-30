@@ -8,7 +8,7 @@ namespace WadMaker.Drawing
 {
     abstract class IndexedCanvas : BufferCanvas, IIndexedCanvas
     {
-        public static IIndexedCanvas Create(int width, int height, PixelFormat pixelFormat, Color[] palette, byte[] buffer = null, int? stride = null)
+        public static IIndexedCanvas Create(int width, int height, PixelFormat pixelFormat, ColorARGB[] palette, byte[] buffer = null, int? stride = null)
         {
             if (width < 1) throw new ArgumentException($"{nameof(width)} must be greater than 0.");
             if (height < 1) throw new ArgumentException($"{nameof(height)} must be greater than 0.");
@@ -40,7 +40,13 @@ namespace WadMaker.Drawing
             {
                 var buffer = new byte[bitmapData.Stride * bitmapData.Height];
                 Marshal.Copy(bitmapData.Scan0, buffer, 0, buffer.Length);
-                return Create(bitmap.Width, bitmap.Height, bitmap.PixelFormat, bitmap.Palette.Entries, buffer, bitmapData.Stride);
+                return Create(
+                    bitmap.Width,
+                    bitmap.Height,
+                    bitmap.PixelFormat,
+                    bitmap.Palette.Entries.Select(color => new ColorARGB(color.A, color.R, color.G, color.B)).ToArray(),
+                    buffer,
+                    bitmapData.Stride);
             }
             finally
             {
@@ -49,17 +55,17 @@ namespace WadMaker.Drawing
         }
 
 
-        public Color[] Palette { get; }
+        public ColorARGB[] Palette { get; }
 
 
-        protected IndexedCanvas(int width, int height, int stride, byte[] buffer, Color[] palette)
+        protected IndexedCanvas(int width, int height, int stride, byte[] buffer, ColorARGB[] palette)
             : base(width, height, stride, buffer)
         {
             Palette = palette;
         }
 
 
-        public override Color GetPixel(int x, int y) => Palette[GetIndex(x, y)];
+        public override ColorARGB GetPixel(int x, int y) => Palette[GetIndex(x, y)];
 
         public abstract int GetIndex(int x, int y);
 
@@ -100,7 +106,7 @@ namespace WadMaker.Drawing
         }
 
 
-        private static Color[] CreateFixedSizePalette(Color[] palette, int size)
+        private static ColorARGB[] CreateFixedSizePalette(ColorARGB[] palette, int size)
         {
             if (palette.Length > size)
                 throw new ArgumentException($"Palette must not contain more than {size} colors.", nameof(palette));
@@ -109,7 +115,7 @@ namespace WadMaker.Drawing
                 return palette;
 
             return palette
-                .Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), size - palette.Length))
+                .Concat(Enumerable.Repeat(new ColorARGB(0, 0, 0), size - palette.Length))
                 .ToArray();
         }
     }

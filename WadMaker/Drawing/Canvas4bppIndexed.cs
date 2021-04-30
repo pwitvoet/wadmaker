@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Drawing;
 using System.Drawing.Imaging;
 
 namespace WadMaker.Drawing
@@ -9,7 +8,7 @@ namespace WadMaker.Drawing
         public override PixelFormat PixelFormat => PixelFormat.Format4bppIndexed;
 
 
-        public Canvas4bppIndexed(int width, int height, int stride, byte[] buffer, Color[] palette)
+        public Canvas4bppIndexed(int width, int height, int stride, byte[] buffer, ColorARGB[] palette)
             : base(width, height, stride, buffer, palette)
         {
             if (palette.Length != 16)

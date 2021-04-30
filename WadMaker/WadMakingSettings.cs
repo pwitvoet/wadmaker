@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
+using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -228,7 +227,7 @@ namespace WadMaker
                     case DitheringKey: textureSettings.DitheringAlgorithm = ParseDitheringAlgorithm(tokens[i++]); break;
                     case TransparentyThresholdKey: textureSettings.TransparencyThreshold = int.Parse(tokens[i++]); break;
                     case MaxErrorDiffusionKey: textureSettings.MaxErrorDiffusion = int.Parse(tokens[i++]); break;
-                    case WaterFogColorKey: textureSettings.WaterFogColor = Color.FromArgb(int.Parse(tokens[i++]), int.Parse(tokens[i++]), int.Parse(tokens[i++])); break;
+                    case WaterFogColorKey: textureSettings.WaterFogColor = new ColorARGB(byte.Parse(tokens[i++]), byte.Parse(tokens[i++]), byte.Parse(tokens[i++])); break;
                     case WaterFogIntensityKey: textureSettings.WaterFogIntensity = int.Parse(tokens[i++]); break;
                     case "//": i = tokens.Length; break;    // Comment, so skip the rest of the line.
                     default:  throw new InvalidDataException($"Invalid setting: '{token}'.");
@@ -257,7 +256,7 @@ namespace WadMaker
             }
         }
 
-        private static string SerializeColor(Color color) => $"{color.R} {color.G} {color.B}";
+        private static string SerializeColor(ColorARGB color) => $"{color.R} {color.G} {color.B}";
 
 
         private static void SaveTimestampedRules(string path, Dictionary<string, Rule> timestampedRules)

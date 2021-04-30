@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-
+﻿
 namespace WadMaker.Drawing
 {
     /// <summary>
@@ -11,6 +10,6 @@ namespace WadMaker.Drawing
         /// Sets the color of the pixel at the given coordinates.
         /// For canvases with an indexed pixel format, use <see cref="SetIndex(int, int, int)"/> instead.
         /// </summary>
-        void SetPixel(int x, int y, Color color);
+        void SetPixel(int x, int y, ColorARGB color);
     }
 }

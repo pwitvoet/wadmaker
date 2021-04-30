@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-using System.Drawing.Imaging;
+﻿using System.Drawing.Imaging;
 
 namespace WadMaker.Drawing
 {
@@ -14,13 +13,13 @@ namespace WadMaker.Drawing
         {
         }
 
-        public override Color GetPixel(int x, int y)
+        public override ColorARGB GetPixel(int x, int y)
         {
             var index = (y * Width + x) * 3;
-            return Color.FromArgb(Buffer[index + 2], Buffer[index + 1], Buffer[index]);
+            return new ColorARGB(Buffer[index + 2], Buffer[index + 1], Buffer[index]);
         }
 
-        public override void SetPixel(int x, int y, Color color)
+        public override void SetPixel(int x, int y, ColorARGB color)
         {
             var index = (y * Width + x) * 3;
             Buffer[index++] = color.B;

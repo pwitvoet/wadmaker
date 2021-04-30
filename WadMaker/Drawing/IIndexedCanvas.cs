@@ -10,7 +10,7 @@ namespace WadMaker.Drawing
         /// <summary>
         /// A fixed number of colors. Only used for indexed pixel formats.
         /// </summary>
-        Color[] Palette { get; }
+        ColorARGB[] Palette { get; }
 
         /// <summary>
         /// Gets the palette index of the pixel at the given coordinates.

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Drawing;
 using System.Drawing.Imaging;
 using WadMaker.Drawing;
 
@@ -22,10 +21,10 @@ namespace WadMaker
         /// </summary>
         public static IIndexedCanvas FloydSteinberg(
             IReadableCanvas canvas,
-            Color[] palette,
-            Func<Color, int> colorIndexLookup,
+            ColorARGB[] palette,
+            Func<ColorARGB, int> colorIndexLookup,
             int maxErrorDiffusion = 255,
-            Func<Color, bool> skipDithering = null)
+            Func<ColorARGB, bool> skipDithering = null)
         {
             var output = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
 
@@ -66,10 +65,10 @@ namespace WadMaker
                         }
                     }
 
-                    var errorCorrectedColor = Color.FromArgb(
-                        Math.Max(0, Math.Min(sourceColor.R + (int)error[0], 255)),
-                        Math.Max(0, Math.Min(sourceColor.G + (int)error[1], 255)),
-                        Math.Max(0, Math.Min(sourceColor.B + (int)error[2], 255)));
+                    var errorCorrectedColor = new ColorARGB(
+                        (byte)Math.Max(0, Math.Min(sourceColor.R + (int)error[0], 255)),
+                        (byte)Math.Max(0, Math.Min(sourceColor.G + (int)error[1], 255)),
+                        (byte)Math.Max(0, Math.Min(sourceColor.B + (int)error[2], 255)));
 
                     var paletteIndex = colorIndexLookup(errorCorrectedColor);
                     var outputColor = palette[paletteIndex];

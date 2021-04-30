@@ -378,11 +378,11 @@ namespace WadMaker
                 textureSettings.QuantizationVolumeSelectionThreshold ?? 32);
 
             if (palette.Length < 256)
-                palette = palette.Concat(Enumerable.Repeat(Color.FromArgb(0, 0, 0), 256 - palette.Length)).ToArray();
+                palette = palette.Concat(Enumerable.Repeat(new ColorARGB(0, 0, 0), 256 - palette.Length)).ToArray();
 
             // Palette handling for special textures:
             if (isTransparentTexture)
-                palette[255] = Color.FromArgb(0, 0, 255);   // Make the transparent color deep blue, by convention.
+                palette[255] = new ColorARGB(0, 0, 255);   // Make the transparent color deep blue, by convention.
 
             if (isWaterTexture)
             {
@@ -391,7 +391,7 @@ namespace WadMaker
                 palette[255] = palette[4];
 
                 palette[3] = textureSettings.WaterFogColor ?? imageCanvas.GetAverageColor();
-                palette[4] = Color.FromArgb(Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - palette[3].GetBrightness()) * 255), 0, 255), 0, 0);
+                palette[4] = new ColorARGB((byte)Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - palette[3].GetBrightness()) * 255), 0, 255), 0, 0);
 
                 // Also update image data:
                 var affectedColors = colorIndexMapping
@@ -431,11 +431,11 @@ namespace WadMaker
         // TODO: Without dithering there's still some potential for flickering, due to the palette being different!
         static IIndexedCanvas ApplyPalette(
             IReadableCanvas canvas,
-            Color[] palette,
-            Func<Color, int> colorIndexLookup,
+            ColorARGB[] palette,
+            Func<ColorARGB, int> colorIndexLookup,
             TextureSettings textureSettings,
             bool noDithering,
-            Func<Color, bool> skipDithering = null)
+            Func<ColorARGB, bool> skipDithering = null)
         {
             var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (noDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             switch (ditheringAlgorithm)
@@ -449,7 +449,7 @@ namespace WadMaker
             }
         }
 
-        static IIndexedCanvas ApplyPaletteWithoutDithering(IReadableCanvas canvas, Color[] palette, Func<Color, int> colorIndexLookup)
+        static IIndexedCanvas ApplyPaletteWithoutDithering(IReadableCanvas canvas, ColorARGB[] palette, Func<ColorARGB, int> colorIndexLookup)
         {
             var output = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
             for (int y = 0; y < canvas.Height; y++)

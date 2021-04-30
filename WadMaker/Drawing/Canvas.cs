@@ -58,6 +58,6 @@ namespace WadMaker.Drawing
         {
         }
 
-        public abstract void SetPixel(int x, int y, Color color);
+        public abstract void SetPixel(int x, int y, ColorARGB color);
     }
 }
