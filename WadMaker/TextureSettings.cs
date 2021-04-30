@@ -2,7 +2,10 @@
 
 namespace WadMaker
 {
-    class TextureSettings
+    /// <summary>
+    /// Settings for converting an image to a texture.
+    /// </summary>
+    struct TextureSettings
     {
         /// <summary>
         /// The number of cuts after which the median-cut color quantization algorithm will switch to a different strategy.

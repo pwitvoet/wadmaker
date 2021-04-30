@@ -11,7 +11,7 @@ using WadMaker.Drawing;
 
 namespace WadMaker
 {
-    class Settings
+    class ProgramSettings
     {
         // Build settings:
         public bool FullRebuild { get; set; }               // -full:       forces a full rebuild instead of an incremental one
@@ -57,9 +57,9 @@ namespace WadMaker
         }
 
 
-        static Settings ParseArguments(string[] args)
+        static ProgramSettings ParseArguments(string[] args)
         {
-            var settings = new Settings();
+            var settings = new ProgramSettings();
 
             // First parse options:
             var index = 0;
@@ -166,6 +166,7 @@ namespace WadMaker
             var texturesUpdated = 0;
             var texturesRemoved = 0;
 
+            var wadMakingSettings = WadMakingSettings.Load(inputDirectory);
             var updateExistingWad = !fullRebuild && File.Exists(outputFilePath);
             var wad = updateExistingWad ? Wad.Load(outputFilePath) : new Wad();
             var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputFilePath).LastWriteTimeUtc : (DateTime?)null;
@@ -203,6 +204,7 @@ namespace WadMaker
 
                 var filePath = imagePaths.Single();
                 var isExistingImage = wadTextureNames.Contains(textureName);
+                (var textureSettings, var lastSettingsChangeTime) = wadMakingSettings.GetTextureSettings(textureName);
                 if (isExistingImage && updateExistingWad)
                 {
                     // NOTE: A texture will not be rebuilt if one of its mipmap files has been removed. In order to detect such cases,
@@ -213,7 +215,7 @@ namespace WadMaker
                         .Where(allInputDirectoryFiles.Contains)
                         .Select(path => new FileInfo(path).LastWriteTimeUtc)
                         .Any(dateTime => dateTime > lastWadUpdateTime);
-                    if (!isImageUpdated)
+                    if (!isImageUpdated && lastSettingsChangeTime < lastWadUpdateTime)
                     {
                         //Console.WriteLine($"No modifications detected for '{textureName}' ({filePath}). Skipping file.");
                         continue;
@@ -223,7 +225,7 @@ namespace WadMaker
                 try
                 {
                     // Create texture from image:
-                    var texture = CreateTextureFromImage(filePath, new TextureSettings { });    // TODO: Load texture-specific settings from files!
+                    var texture = CreateTextureFromImage(filePath, textureSettings);
 
                     if (isExistingImage)
                     {
@@ -408,16 +410,10 @@ namespace WadMaker
             var resultCanvases = inputCanvases
                 .Select(canvas =>
                 {
-                    if (canvas == null)
+                    if (canvas != null)
+                        return ApplyPalette(canvas, palette, colorIndexLookup, textureSettings, noDithering: isAnimatedTexture, skipDithering: color => color.A < transparencyThreshold);
+                    else
                         return null;
-
-                    return ApplyPalette(
-                        canvas,
-                        palette,
-                        colorIndexLookup,
-                        textureSettings,
-                        noDithering: isAnimatedTexture,
-                        skipDithering: color => color.A < transparencyThreshold);
                 })
                 .ToArray();
 
