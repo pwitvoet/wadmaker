@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-
+﻿
 namespace WadMaker.Drawing
 {
     /// <summary>

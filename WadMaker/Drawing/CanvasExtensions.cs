@@ -14,16 +14,7 @@ namespace WadMaker.Drawing
         public static Bitmap CreateBitmap(this IReadableCanvas canvas)
         {
             var bitmap = new Bitmap(canvas.Width, canvas.Height, canvas.PixelFormat);
-            var bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-            try
-            {
-                var buffer = (canvas as IBufferCanvas)?.Buffer ?? canvas.CreateBuffer();
-                Marshal.Copy(buffer, 0, bitmapData.Scan0, buffer.Length);
-            }
-            finally
-            {
-                bitmap.UnlockBits(bitmapData);
-            }
+            canvas.CopyTo(bitmap);
             return bitmap;
         }
 
@@ -64,13 +55,12 @@ namespace WadMaker.Drawing
             var minHeight = Math.Min(canvas.Height, destination.Height);
             var bitmapData = destination.LockBits(new Rectangle(0, 0, destination.Width, destination.Height), ImageLockMode.WriteOnly, destination.PixelFormat);
 
-
             try
             {
                 if (canvas.PixelFormat == destination.PixelFormat && canvas is IBufferCanvas bufferCanvas)
                 {
                     if (canvas is IIndexedCanvas indexedCanvas)
-                        Array.Copy(indexedCanvas.Palette, destination.Palette.Entries, indexedCanvas.Palette.Length);
+                        CopyPalette(indexedCanvas, destination);
 
                     if (bufferCanvas.Stride == bitmapData.Stride)
                     {
@@ -92,7 +82,7 @@ namespace WadMaker.Drawing
                         throw new NotSupportedException($"Cannot copy an indexed canvas to an indexed bitmap with a smaller palette.");
 
 
-                    Array.Copy(indexedCanvas.Palette, destination.Palette.Entries, indexedCanvas.Palette.Length);
+                    CopyPalette(indexedCanvas, destination);
 
                     var buffer = new byte[bitmapData.Stride * bitmapData.Height];
                     var destinationCanvas = IndexedCanvas.Create(
@@ -143,6 +133,14 @@ namespace WadMaker.Drawing
             }
             var pixelCount = canvas.Width * canvas.Height;
             return new ColorARGB((byte)(r / pixelCount), (byte)(g / pixelCount), (byte)(b / pixelCount));
+        }
+
+
+        private static void CopyPalette(IIndexedCanvas fromCanvas, Bitmap toBitmap)
+        {
+            var palette = toBitmap.Palette;
+            Array.Copy(fromCanvas.Palette.Select(color => Color.FromArgb(color.A, color.R, color.G, color.B)).ToArray(), palette.Entries, fromCanvas.Palette.Length);
+            toBitmap.Palette = palette;
         }
     }
 }
