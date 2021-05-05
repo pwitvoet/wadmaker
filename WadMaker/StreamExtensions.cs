@@ -76,5 +76,16 @@ namespace WadMaker
         public static void Write(this Stream stream, ColorARGB value) => stream.Write(new byte[] { value.R, value.G, value.B });
 
         #endregion
+
+
+        // NOTE: Find a better place for this function!
+        /// <summary>
+        /// Returns the number of bytes that must be added to the given <paramref name="length"/> to make it a multiple of <paramref name="padToMultipleOf"/>.
+        /// </summary>
+        public static int RequiredPadding(int length, int padToMultipleOf)
+        {
+            var excess = length % padToMultipleOf;
+            return excess == 0 ? 0 : padToMultipleOf - excess;
+        }
     }
 }

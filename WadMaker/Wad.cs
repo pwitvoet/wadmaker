@@ -115,7 +115,7 @@ namespace WadMaker
                     foreach (var color in texture.Palette)
                         stream.Write(color);
                 }
-                stream.Write(new byte[RequiredPadding(2 + texture.Palette.Length * 3, 4)]); // Padding.
+                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
             else if (texture.Type == TextureType.Font)
             {
@@ -134,7 +134,7 @@ namespace WadMaker
                 stream.Write((ushort)texture.Palette.Length);
                 foreach (var color in texture.Palette)
                     stream.Write(color);
-                stream.Write(new byte[RequiredPadding(2 + texture.Palette.Length * 3, 4)]); // Padding.
+                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
             else if (texture.Type == TextureType.SimpleTexture)
             {
@@ -145,7 +145,7 @@ namespace WadMaker
                 stream.Write((ushort)texture.Palette.Length);
                 foreach (var color in texture.Palette)
                     stream.Write(color);
-                stream.Write(new byte[RequiredPadding(2 + texture.Palette.Length * 3, 4)]); // Padding.
+                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
             else
             {
@@ -251,7 +251,7 @@ namespace WadMaker
                 size += texture.Mipmap3Data.Length;
                 size += 2;
                 size += texture.Palette.Length * 3;
-                size += RequiredPadding(2 + texture.Palette.Length * 3, 4);
+                size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else if (texture.Type == TextureType.Font)
@@ -261,7 +261,7 @@ namespace WadMaker
                 size += texture.ImageData.Length;
                 size += 2;
                 size += texture.Palette.Length * 3;
-                size += RequiredPadding(2 + texture.Palette.Length * 3, 4);
+                size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else if (texture.Type == TextureType.SimpleTexture)
@@ -270,19 +270,13 @@ namespace WadMaker
                 size += texture.ImageData.Length;
                 size += 2;
                 size += texture.Palette.Length * 3;
-                size += RequiredPadding(2 + texture.Palette.Length * 3, 4);
+                size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else
             {
                 throw new NotSupportedException($"Texture type {texture.Type} is not supported.");
             }
-        }
-
-        private static int RequiredPadding(int length, int padToMultipleOf)
-        {
-            var excess = length % padToMultipleOf;
-            return excess == 0 ? 0 : padToMultipleOf - excess;
         }
 
 

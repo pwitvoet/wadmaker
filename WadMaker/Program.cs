@@ -22,10 +22,14 @@ namespace WadMaker
         public bool ExtractMipmaps { get; set; }            // -mipmaps:    also extract mipmaps
         public bool OverwriteExistingFiles { get; set; }    // -overwrite:  extract mode only, enables overwriting of existing image files (off by default)
 
+        // Bsp settings:
+        public bool RemoveEmbeddedTextures { get; set; }    // -remove      removes embedded textures from the given bsp file
+
         // Other settings:
         public string InputDirectory { get; set; }          // Build mode only
-        public string FilePath { get; set; }                // Wad or bsp path (output in build mode, input in extract mode).
+        public string InputFilePath { get; set; }           // Wad or bsp path (output in build mode, input in extract mode).
         public string OutputDirectory { get; set; }         // Extract mode only
+        public string OutputFilePath { get; set; }          // Output bsp path (when removing embedded textures)
     }
 
     class Program
@@ -42,7 +46,11 @@ namespace WadMaker
                 var settings = ParseArguments(args);
                 if (settings.Extract)
                 {
-                    ExtractTextures(settings.FilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
+                    ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
+                }
+                else if (settings.RemoveEmbeddedTextures)
+                {
+                    RemoveEmbeddedTextures(settings.InputFilePath, settings.OutputFilePath);
                 }
                 else
                 {
@@ -72,6 +80,7 @@ namespace WadMaker
                     case "-subdirs": settings.IncludeSubDirectories = true; break;
                     case "-mipmaps": settings.ExtractMipmaps = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
+                    case "-remove": settings.RemoveEmbeddedTextures = true; break;
                     default: throw new ArgumentException($"Unknown argument: '{arg}'.");
                 }
             }
@@ -81,30 +90,42 @@ namespace WadMaker
             if (paths.Length == 0)
                 throw new ArgumentException("Missing input folder (for wad building) or file (for texture extraction) argument.");
 
-            if (paths[0].EndsWith(".wad") || paths[0].EndsWith(".bsp"))
+            if (paths[0].EndsWith(".wad") || (paths[0].EndsWith(".bsp") && !settings.RemoveEmbeddedTextures))
                 settings.Extract = true;
 
 
             if (settings.Extract)
             {
-                settings.FilePath = args[index++];
+                // Texture extraction requires a wad or bsp file path, and optionally an output folder:
+                settings.InputFilePath = args[index++];
 
                 if (index < args.Length)
                     settings.OutputDirectory = args[index++];
                 else
-                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.FilePath), Path.GetFileNameWithoutExtension(settings.FilePath));
+                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.InputFilePath), Path.GetFileNameWithoutExtension(settings.InputFilePath) + "_extracted");
+            }
+            else if (settings.RemoveEmbeddedTextures)
+            {
+                // Embedded texture removal requires a bsp file path, and optionally an output bsp file path:
+                settings.InputFilePath = args[index++];
+
+                if (index < args.Length)
+                    settings.OutputFilePath = args[index++];
+                else
+                    settings.OutputFilePath = settings.InputFilePath;
             }
             else
             {
+                // Wad making requires a directory path, and optionally an output wad file path:
                 settings.InputDirectory = args[index++];
 
                 if (index < args.Length)
-                    settings.FilePath = args[index++];
+                    settings.InputFilePath = args[index++];
                 else
-                    settings.FilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
+                    settings.InputFilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
 
-                if (!Path.IsPathRooted(settings.FilePath))
-                    settings.FilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), settings.FilePath);
+                if (!Path.IsPathRooted(settings.InputFilePath))
+                    settings.InputFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), settings.InputFilePath);
             }
 
             return settings;
@@ -155,6 +176,20 @@ namespace WadMaker
             }
 
             Console.WriteLine($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputFilePath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+        }
+
+        static void RemoveEmbeddedTextures(string bspFilePath, string outputFilePath)
+        {
+            var stopwatch = Stopwatch.StartNew();
+
+            if (!bspFilePath.EndsWith(".bsp"))
+                throw new ArgumentException("Removing embedded textures requires a .bsp file.");
+
+            Console.WriteLine($"Removing embedded textures from '{bspFilePath}' and saving the result to '{outputFilePath}'.");
+
+            var removedTextureCount = Bsp.RemoveEmbeddedTextures(bspFilePath, outputFilePath);
+
+            Console.WriteLine($"Removed {removedTextureCount} embedded textures from {bspFilePath} in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         // TODO: Add support for more image file formats!
