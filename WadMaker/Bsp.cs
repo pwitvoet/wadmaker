@@ -1,8 +1,8 @@
-﻿using System;
+﻿using SixLabors.ImageSharp.PixelFormats;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -279,7 +279,7 @@ namespace WadMaker
             public uint Width;
             public uint Height;
             public byte[][] ImageData;
-            public ColorARGB[] Palette;
+            public Rgba32[] Palette;
 
             public bool IsEmbedded => ImageData != null && ImageData.All(data => data != null) && Palette != null;
         }

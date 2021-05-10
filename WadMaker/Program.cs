@@ -1,13 +1,14 @@
-﻿using System;
+﻿using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using WadMaker.Drawing;
 
 namespace WadMaker
 {
@@ -54,7 +55,7 @@ namespace WadMaker
                 }
                 else
                 {
-                    MakeWad(settings.InputDirectory, settings.FilePath, settings.FullRebuild, settings.IncludeSubDirectories);
+                    MakeWad(settings.InputDirectory, settings.InputFilePath, settings.FullRebuild, settings.IncludeSubDirectories);
                 }
             }
             catch (Exception ex)
@@ -131,7 +132,6 @@ namespace WadMaker
             return settings;
         }
 
-        // TODO: What if dir already exists? ...ask to overwrite files? maybe add a -force cmd flag?
         // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
         //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
         static void ExtractTextures(string inputFilePath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles)
@@ -162,9 +162,9 @@ namespace WadMaker
                             continue;
                         }
 
-                        using (var image = TextureToBitmap(texture, mipmap))
+                        using (var image = TextureToImage(texture, mipmap))
                         {
-                            image.Save(filePath, ImageFormat.Png);
+                            image.SaveAsPng(filePath);
                             imageFilesCreated += 1;
                         }
                     }
@@ -192,7 +192,6 @@ namespace WadMaker
             Console.WriteLine($"Removed {removedTextureCount} embedded textures from {bspFilePath} in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        // TODO: Add support for more image file formats!
         static void MakeWad(string inputDirectory, string outputFilePath, bool fullRebuild, bool includeSubDirectories)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -321,48 +320,30 @@ namespace WadMaker
 
 
         // Wad extraction:
-        static Bitmap TextureToBitmap(Texture texture, int mipmap = 0)
+        static Image<Rgba32> TextureToImage(Texture texture, int mipmap = 0)
         {
             var hasColorKey = texture.Name.StartsWith('{');
 
-            var textureCanvas = CreateTextureCanvas(texture, mipmap);
-            var bitmapCanvas = Canvas.Create(textureCanvas.Width, textureCanvas.Height, hasColorKey ? PixelFormat.Format32bppArgb : PixelFormat.Format24bppRgb);
-            if (!hasColorKey)
+            var image = new Image<Rgba32>(texture.Width, texture.Height);
+            for (int y = 0; y < image.Height; y++)
             {
-                textureCanvas.CopyTo(bitmapCanvas);
-            }
-            else
-            {
-                for (int y = 0; y < textureCanvas.Height; y++)
+                var rowSpan = image.GetPixelRowSpan(y);
+                for (int x = 0; x < image.Width; x++)
                 {
-                    for (int x = 0; x < textureCanvas.Width; x++)
+                    var paletteIndex = texture.ImageData[y * texture.Width + x];
+                    if (paletteIndex == 255 && hasColorKey)
                     {
-                        var colorIndex = textureCanvas.GetIndex(x, y);
-                        if (colorIndex != 255)
-                            bitmapCanvas.SetPixel(x, y, textureCanvas.Palette[colorIndex]);
+                        rowSpan[x] = new Rgba32(0, 0, 0, 0);
+                    }
+                    else
+                    {
+                        rowSpan[x] = texture.Palette[paletteIndex];
                     }
                 }
             }
-            return bitmapCanvas.CreateBitmap();
+
+            return image;
         }
-
-        static IIndexedCanvas CreateTextureCanvas(Texture texture, int mipmap = 0)
-        {
-            var mipmapData = mipmap switch {
-                0 => texture.ImageData,
-                1 => texture.Mipmap1Data,
-                2 => texture.Mipmap2Data,
-                3 => texture.Mipmap3Data,
-                _ => null
-            };
-
-            if (mipmapData == null)
-                return null;
-
-            var scale = 1 << mipmap;
-            return IndexedCanvas.Create(texture.Width / scale, texture.Height / scale, PixelFormat.Format8bppIndexed, texture.Palette, mipmapData, texture.Width / scale);
-        }
-
 
 
         // Wad making:
@@ -371,8 +352,9 @@ namespace WadMaker
 
         static bool IsSupportedFiletype(string path)
         {
-            var extension = Path.GetExtension(path);
-            return extension == ".png" || extension == ".bmp" || extension == ".jpg";
+            var extension = Path.GetExtension(path).TrimStart('.');
+            return Configuration.Default.ImageFormats
+                .Any(format => format.FileExtensions.Contains(extension));
         }
 
         static IEnumerable<string> GetMipmapFilePaths(string path)
@@ -383,147 +365,157 @@ namespace WadMaker
 
         static Texture CreateTextureFromImage(string path, TextureSettings textureSettings)
         {
-            // First load all input images (mipmaps are optional, missing ones will be generated automatically):
-            var imageCanvas = CanvasFromFile(path);
-            if (imageCanvas.Width % 16 != 0 || imageCanvas.Height % 16 != 0)
-                throw new InvalidDataException($"Texture '{path}' width or height is not a multiple of 16.");
-
-            var mipmapCanvases = GetMipmapFilePaths(path)
-                .Select(mipmapPath => File.Exists(mipmapPath) ? CanvasFromFile(mipmapPath) : null)
-                .ToArray();
-
-            // Are we dealing with a special texture (transparency, animation, water)?
-            var filename = Path.GetFileName(path);
-            var isTransparentTexture = filename.StartsWith("{");
-            var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(filename);
-            var isWaterTexture = filename.StartsWith('!');
-
-            // Create a (combined) color histogram for all of our input images:
-            var inputCanvases = mipmapCanvases
-                .Prepend(imageCanvas)
-                .ToArray();
-
-            var transparencyThreshold = textureSettings.TransparencyThreshold ?? (isTransparentTexture ? 128 : 0);
-            var colorHistogram = ColorQuantization.GetColorHistogram(inputCanvases.Where(canvas => canvas != null), color => color.A < transparencyThreshold);
-
-            // Create the palette (also taking the mipmaps into account, because they'll be sharing the palette):
-            (var palette, var colorIndexMapping) = ColorQuantization.CreatePaletteAndColorIndexMapping(
-                colorHistogram,
-                isWaterTexture ? 254 : isTransparentTexture ? 255 : 256,
-                textureSettings.QuantizationVolumeSelectionThreshold ?? 32);
-
-            if (palette.Length < 256)
-                palette = palette.Concat(Enumerable.Repeat(new ColorARGB(0, 0, 0), 256 - palette.Length)).ToArray();
-
-            // Palette handling for special textures:
-            if (isTransparentTexture)
-                palette[255] = new ColorARGB(0, 0, 255);   // Make the transparent color deep blue, by convention.
-
-            if (isWaterTexture)
+            // Load the main texture image, and any available mipmap images:
+            using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
+                .Select(path => File.Exists(path) ? Image.Load<Rgba32>(path) : null)))
             {
-                // Fog color and intensity are stored in palette slots 3 and 4, so we'll have to move the colors at those slots:
-                palette[254] = palette[3];
-                palette[255] = palette[4];
+                // Verify image sizes:
+                if (images[0].Width % 16 != 0 || images[0].Height % 16 != 0)
+                    throw new InvalidDataException($"Texture '{path}' width or height is not a multiple of 16.");
 
-                palette[3] = textureSettings.WaterFogColor ?? imageCanvas.GetAverageColor();
-                palette[4] = new ColorARGB((byte)Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - palette[3].GetBrightness()) * 255), 0, 255), 0, 0);
-
-                // Also update image data:
-                var affectedColors = colorIndexMapping
-                    .Where(kv => kv.Value == 3 || kv.Value == 4)
-                    .Select(kv => kv.Key)
-                    .ToArray();
-                foreach (var color in affectedColors)
-                    colorIndexMapping[color] += 251;
-            }
+                for (int i = 1; i < images.Count; i++)
+                    if (images[i] != null && (images[i].Width != images[0].Width >> i || images[i].Height != images[0].Height >> i))
+                        throw new InvalidDataException($"Mipmap {i} for texture '{path}' width or height does not match texture size.");
 
 
-            // Finally, apply the palette (optionally using a dithering algorithm).
-            // Dithering is disabled for animated textures, in order to reduce 'flickering' artifacts.
-            // It's currently also disabled for transparent textures (the dithering algorithm would need to be modified to skip transparent pixels):
-            var colorIndexLookup = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMapping, color => color.A < transparencyThreshold);
-            var resultCanvases = inputCanvases
-                .Select(canvas =>
+                var filename = Path.GetFileName(path);
+                var isTransparentTexture = filename.StartsWith('{');
+                var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(filename);
+                var isWaterTexture = filename.StartsWith('!');
+
+                // Create a suitable palette, taking special texture types into account:
+                var transparencyThreshold = isTransparentTexture ? Math.Clamp(textureSettings.TransparencyThreshold ?? 128, 0, 255) : 0;
+                bool isTransparentPredicate(Rgba32 color) => color.A < transparencyThreshold;
+                var colorHistogram = ColorQuantization.GetColorHistogram(images.Where(image => image != null), isTransparentPredicate);
+
+                var maxColors = 256 - (isTransparentTexture ? 1 : 0) - (isWaterTexture ? 2 : 0);
+                var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
+
+                // Always make sure we've got a 256-color palette (some tools can't handle smaller palettes):
+                if (colorClusters.Length < maxColors)
                 {
-                    if (canvas != null)
-                        return ApplyPalette(canvas, palette, colorIndexLookup, textureSettings, noDithering: isAnimatedTexture, skipDithering: color => color.A < transparencyThreshold);
-                    else
-                        return null;
-                })
-                .ToArray();
+                    colorClusters = colorClusters
+                        .Concat(Enumerable
+                            .Range(0, maxColors - colorClusters.Length)
+                            .Select(i => (new Rgba32(), new[] { new Rgba32() })))
+                        .ToArray();
+                }
 
-            return Texture.CreateMipmapTexture(
-                name: Path.GetFileNameWithoutExtension(path),
-                width: imageCanvas.Width,
-                height: imageCanvas.Height,
-                imageData: GetBuffer(resultCanvases[0]),
-                palette: palette,
-                mipmap1Data: GetBuffer(resultCanvases[1] != null ? resultCanvases[1] : CreateMipmap(resultCanvases[0], 2)),
-                mipmap2Data: GetBuffer(resultCanvases[2] != null ? resultCanvases[2] : CreateMipmap(resultCanvases[0], 4)),
-                mipmap3Data: GetBuffer(resultCanvases[3] != null ? resultCanvases[3] : CreateMipmap(resultCanvases[0], 8)));
+                // Make palette adjustments for special textures:
+                if (isWaterTexture)
+                {
+                    var fogColor = textureSettings.WaterFogColor ?? GetAverageColor(colorHistogram);
+                    var fogIntensity = new Rgba32((byte)Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
+
+                    colorClusters = colorClusters.Take(3)
+                        .Append((fogColor, new[] { fogColor }))         // Slot 3: water fog color
+                        .Append((fogIntensity, new[] { fogIntensity })) // Slot 4: fog intensity (stored in red channel)
+                        .Concat(colorClusters.Skip(3))
+                        .ToArray();
+                }
+
+                if (isTransparentTexture)
+                {
+                    var colorKey = new Rgba32(0, 0, 255);
+                    colorClusters = colorClusters
+                        .Append((colorKey, new[] { colorKey }))         // Slot 255: used for transparent pixels
+                        .ToArray();
+                }
+
+                // Create the actual palette, and a color index lookup cache:
+                var palette = colorClusters
+                    .Select(cluster => cluster.Item1)
+                    .ToArray();
+                var colorIndexMappingCache = new Dictionary<Rgba32, int>();
+                for (int i = 0; i < colorClusters.Length; i++)
+                {
+                    (_, var colors) = colorClusters[i];
+                    foreach (var color in colors)
+                        colorIndexMappingCache[color] = i;
+                }
+
+                // Create any missing mipmaps:
+                for (int i = 0; i < images.Count; i++)
+                {
+                    if (images[i] == null)
+                        images[i] = images[0].Clone(context => context.Resize(images[0].Width >> i, images[0].Height >> i));
+                }
+
+                // Create texture data:
+                var textureData = images
+                    .Select(image => CreateTextureData(image, palette, colorIndexMappingCache, textureSettings, isTransparentPredicate, disableDithering: isAnimatedTexture))
+                    .ToArray();
+
+                return Texture.CreateMipmapTexture(
+                    name: Path.GetFileNameWithoutExtension(path),
+                    width: images[0].Width,
+                    height: images[0].Height,
+                    imageData: textureData[0],
+                    palette: palette,
+                    mipmap1Data: textureData[1],
+                    mipmap2Data: textureData[2],
+                    mipmap3Data: textureData[3]);
+            }
         }
 
-        // TODO: Without dithering there's still some potential for flickering, due to the palette being different!
-        static IIndexedCanvas ApplyPalette(
-            IReadableCanvas canvas,
-            ColorARGB[] palette,
-            Func<ColorARGB, int> colorIndexLookup,
-            TextureSettings textureSettings,
-            bool noDithering,
-            Func<ColorARGB, bool> skipDithering = null)
+
+        static Rgba32 GetAverageColor(IDictionary<Rgba32, int> colorHistogram)
         {
-            var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (noDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
+            var r = 0L;
+            var g = 0L;
+            var b = 0L;
+            var totalWeight = 0L;
+            foreach (var kv in colorHistogram)
+            {
+                r += kv.Key.R * kv.Value;
+                g += kv.Key.G * kv.Value;
+                b += kv.Key.B * kv.Value;
+            }
+            if (totalWeight <= 0)
+                return new Rgba32();
+
+            return new Rgba32((byte)Math.Clamp(r / totalWeight, 0, 255), (byte)Math.Clamp(g / totalWeight, 0, 255), (byte)Math.Clamp(b / totalWeight, 0, 255));
+        }
+
+        static int GetBrightness(Rgba32 color) => (int)(color.R * 0.21 + color.G * 0.72 + color.B * 0.07);
+
+        // TODO: Disable dithering for animated textures again? It doesn't actually remove all flickering, because different frames can still have different palettes...!
+        static byte[] CreateTextureData(
+            Image<Rgba32> image,
+            Rgba32[] palette,
+            IDictionary<Rgba32, int> colorIndexMappingCache,
+            TextureSettings textureSettings,
+            Func<Rgba32, bool> isTransparent,
+            bool disableDithering)
+        {
+            var getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent);
+
+            var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (disableDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             switch (ditheringAlgorithm)
             {
                 default:
                 case DitheringAlgorithm.None:
-                    return ApplyPaletteWithoutDithering(canvas, palette, colorIndexLookup);
+                    return ApplyPaletteWithoutDithering();
 
                 case DitheringAlgorithm.FloydSteinberg:
-                    return Dithering.FloydSteinberg(canvas, palette, colorIndexLookup, textureSettings.MaxErrorDiffusion ?? 255, skipDithering);
+                    return Dithering.FloydSteinberg(image, palette, getColorIndex, /*textureSettings.DitherScale ?? */ 0.75f, isTransparent);
             }
-        }
 
-        static IIndexedCanvas ApplyPaletteWithoutDithering(IReadableCanvas canvas, ColorARGB[] palette, Func<ColorARGB, int> colorIndexLookup)
-        {
-            var output = IndexedCanvas.Create(canvas.Width, canvas.Height, PixelFormat.Format8bppIndexed, palette);
-            for (int y = 0; y < canvas.Height; y++)
+
+            byte[] ApplyPaletteWithoutDithering()
             {
-                for (int x = 0; x < canvas.Width; x++)
+                var textureData = new byte[image.Width * image.Height];
+                for (int y = 0; y < image.Height; y++)
                 {
-                    var originalColor = canvas.GetPixel(x, y);
-                    var paletteIndex = colorIndexLookup(originalColor);
-                    output.SetIndex(x, y, paletteIndex);
+                    var rowSpan = image.GetPixelRowSpan(y);
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        var color = rowSpan[x];
+                        textureData[y * image.Width + x] = (byte)getColorIndex(color);
+                    }
                 }
-            }
-            return output;
-        }
-
-        static IReadableCanvas CanvasFromFile(string path)
-        {
-            using (var bitmap = new Bitmap(path))
-            {
-                if (bitmap.PixelFormat.HasFlag(PixelFormat.Indexed))
-                    return IndexedCanvas.Create(bitmap);
-
-                return Canvas.Create(bitmap);
+                return textureData;
             }
         }
-
-        // TODO: Take the average color of each block of pixels (or provide texture-specific options for this?)
-        static IIndexedCanvas CreateMipmap(IIndexedCanvas canvas, int scale)
-        {
-            var mipmapCanvas = IndexedCanvas.Create(canvas.Width / scale, canvas.Height / scale, canvas.PixelFormat, canvas.Palette, stride: canvas.Width / scale);
-            for (int y = 0; y < mipmapCanvas.Height; y++)
-            {
-                for (int x = 0; x < mipmapCanvas.Width; x++)
-                {
-                    mipmapCanvas.SetIndex(x, y, canvas.GetIndex(x * scale, y * scale));
-                }
-            }
-            return mipmapCanvas;
-        }
-
-        static byte[] GetBuffer(IReadableCanvas canvas) => (canvas as IBufferCanvas)?.Buffer ?? canvas.CreateBuffer();
     }
 }

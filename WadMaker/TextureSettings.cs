@@ -1,4 +1,4 @@
-﻿using WadMaker.Drawing;
+﻿using SixLabors.ImageSharp.PixelFormats;
 
 namespace WadMaker
 {
@@ -39,7 +39,7 @@ namespace WadMaker
         /// Water fog color.
         /// Defaults to the image's average color.
         /// </summary>
-        public ColorARGB? WaterFogColor { get; set; }
+        public Rgba32? WaterFogColor { get; set; }
 
         /// <summary>
         /// Water fog intensity. Ranges from 0 (low intensity, increased view distance) to 255 (high intensity, reduced view distance).
