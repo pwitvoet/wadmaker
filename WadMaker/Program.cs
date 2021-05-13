@@ -405,7 +405,7 @@ namespace WadMaker
                 if (isWaterTexture)
                 {
                     var fogColor = textureSettings.WaterFogColor ?? GetAverageColor(colorHistogram);
-                    var fogIntensity = new Rgba32((byte)Math.Clamp(textureSettings.WaterFogIntensity ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
+                    var fogIntensity = new Rgba32((byte)Math.Clamp(textureSettings.WaterFogColor?.A ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
 
                     colorClusters = colorClusters.Take(3)
                         .Append((fogColor, new[] { fogColor }))         // Slot 3: water fog color
@@ -498,7 +498,7 @@ namespace WadMaker
                     return ApplyPaletteWithoutDithering();
 
                 case DitheringAlgorithm.FloydSteinberg:
-                    return Dithering.FloydSteinberg(image, palette, getColorIndex, /*textureSettings.DitherScale ?? */ 0.75f, isTransparent);
+                    return Dithering.FloydSteinberg(image, palette, getColorIndex, textureSettings.DitherScale ?? 0.75f, isTransparent);
             }
 
 

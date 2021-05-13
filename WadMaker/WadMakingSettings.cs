@@ -17,13 +17,11 @@ namespace WadMaker
     /// </summary>
     class WadMakingSettings
     {
-        const string QuantizationStrategyThresholdKey = "quantization-strategy-threshold:";
-        const string DitheringKey = "dithering:";
-        const string TransparentyThresholdKey = "transparency-threshold:";
-        const string MaxErrorDiffusionKey = "max-error-diffusion:";
-        const string WaterFogColorKey = "water-fog-color:";
-        const string WaterFogIntensityKey = "water-fog-intensity:";
-        const string TimestampKey = "timestamp:";
+        const string DitheringAlgorithmKey = "dithering";
+        const string DitherScaleKey = "dither-scale";
+        const string TransparencyThresholdKey = "transparency-threshold";
+        const string WaterFogColorKey = "water-fog";
+        const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
 
 
@@ -187,15 +185,10 @@ namespace WadMaker
             return new WadMakingSettings(newRules.Values);
         }
 
-        // TODO: Improve parsing - requiring a space between a key and value when keys are already followed by a colon is error-prone!
         private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
         {
-            // Ignore comment lines:
-            if (line.TrimStart().StartsWith("//"))
-                return null;
-
-            var tokens = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-            if (tokens.Length == 0)
+            var tokens = GetTokens(line).ToArray();
+            if (tokens.Length == 0 || tokens[0] == "//")
                 return null;
 
             var i = 0;
@@ -206,15 +199,26 @@ namespace WadMaker
             while (i < tokens.Length)
             {
                 var token = tokens[i++];
+                if (token == "//")
+                    break;
 
                 if (internalFormat)
                 {
                     var isHandled = true;
                     switch (token.ToLowerInvariant())
                     {
-                        case TimestampKey: ruleTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(tokens[i++])); break;
-                        case RemovedKey: isRemoved = true; break;
-                        default: isHandled = false; break;
+                        case TimestampKey:
+                            RequireToken(":");
+                            ruleTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(ParseToken(long.Parse, "numeric timestamp"));
+                            break;
+
+                        case RemovedKey:
+                            isRemoved = true;
+                            break;
+
+                        default:
+                            isHandled = false;
+                            break;
                     }
 
                     if (isHandled)
@@ -223,17 +227,83 @@ namespace WadMaker
 
                 switch (token.ToLowerInvariant())
                 {
-                    case QuantizationStrategyThresholdKey: textureSettings.QuantizationVolumeSelectionThreshold = int.Parse(tokens[i++]); break;
-                    case DitheringKey: textureSettings.DitheringAlgorithm = ParseDitheringAlgorithm(tokens[i++]); break;
-                    case TransparentyThresholdKey: textureSettings.TransparencyThreshold = int.Parse(tokens[i++]); break;
-                    case MaxErrorDiffusionKey: textureSettings.MaxErrorDiffusion = int.Parse(tokens[i++]); break;
-                    case WaterFogColorKey: textureSettings.WaterFogColor = new Rgba32(byte.Parse(tokens[i++]), byte.Parse(tokens[i++]), byte.Parse(tokens[i++])); break;
-                    case WaterFogIntensityKey: textureSettings.WaterFogIntensity = int.Parse(tokens[i++]); break;
-                    case "//": i = tokens.Length; break;    // Comment, so skip the rest of the line.
-                    default:  throw new InvalidDataException($"Invalid setting: '{token}'.");
+                    case DitheringAlgorithmKey:
+                        RequireToken(":");
+                        textureSettings.DitheringAlgorithm = ParseToken(ParseDitheringAlgorithm, "dithering algorithm");
+                        break;
+
+                    case DitherScaleKey:
+                        RequireToken(":");
+                        textureSettings.DitherScale = ParseToken(long.Parse, "dither scale");
+                        break;
+
+                    case TransparencyThresholdKey:
+                        RequireToken(":");
+                        textureSettings.TransparencyThreshold = ParseToken(byte.Parse, "transparency threshold");
+                        break;
+
+                    case WaterFogColorKey:
+                        RequireToken(":");
+                        textureSettings.WaterFogColor = new Rgba32(ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse));
+                        break;
+
+                    default:
+                        throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
             }
             return new Rule(namePattern, isRemoved ? null : (TextureSettings?)textureSettings, ruleTimestamp ?? fileTimestamp);
+
+
+            void RequireToken(string value)
+            {
+                if (i >= tokens.Length) throw new InvalidDataException($"Expected a '{value}', but found end of line.");
+                if (tokens[i++] != value) throw new InvalidDataException($"Expected a '{value}', but found '{tokens[i - 1]}'.");
+            }
+
+            T ParseToken<T>(Func<string, T> parse, string label = null)
+            {
+                if (i >= tokens.Length)
+                    throw new InvalidDataException($"Expected a {label ?? typeof(T).ToString()}, but found end of line.");
+
+                try
+                {
+                    return parse(tokens[i++]);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidDataException($"Expected a {label ?? typeof(T).ToString()}, but found '{tokens[i - 1]}'.");
+                }
+            }
+        }
+
+        private static IEnumerable<string> GetTokens(string line)
+        {
+            var start = 0;
+            for (int i = 0; i < line.Length; i++)
+            {
+                var c = line[i];
+                if (char.IsWhiteSpace(c))
+                {
+                    if (i > start) yield return Token(i);
+                    start = i + 1;
+                }
+                else if (c == ':')
+                {
+                    if (i > start) yield return Token(i);
+                    yield return ":";
+                    start = i + 1;
+                }
+                else if (c == '/' && i > start && line[i - 1] == '/')
+                {
+                    if (i - 1 > start) yield return Token(i - 1);
+                    yield return "//";
+                    start = i + 1;
+                }
+            }
+
+            if (start < line.Length) yield return Token(line.Length);
+
+            string Token(int end) => line.Substring(start, end - start);
         }
 
         private static DitheringAlgorithm ParseDitheringAlgorithm(string str)
@@ -245,18 +315,6 @@ namespace WadMaker
                 default: throw new InvalidDataException($"Invalid dithering algorithm: '{str}'.");
             }
         }
-
-        private static string SerializeDitheringAlgorithm(DitheringAlgorithm dithering)
-        {
-            switch (dithering)
-            {
-                case DitheringAlgorithm.None: return "none";
-                case DitheringAlgorithm.FloydSteinberg: return "floyd-steinberg";
-                default: throw new InvalidDataException($"Invalid dithering algorithm: {dithering}.");
-            }
-        }
-
-        private static string SerializeColor(Rgba32 color) => $"{color.R} {color.G} {color.B}";
 
 
         private static void SaveTimestampedRules(string path, Dictionary<string, Rule> timestampedRules)
@@ -272,20 +330,30 @@ namespace WadMaker
                     {
                         var settings = rule.TextureSettings.Value;
 
-                        if (settings.QuantizationVolumeSelectionThreshold != null) writer.Write($" {QuantizationStrategyThresholdKey} {settings.QuantizationVolumeSelectionThreshold}");
-                        if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringKey} {SerializeDitheringAlgorithm(settings.DitheringAlgorithm.Value)}");
-                        if (settings.TransparencyThreshold != null) writer.Write($" {TransparentyThresholdKey} {settings.TransparencyThreshold}");
-                        if (settings.MaxErrorDiffusion != null) writer.Write($" {MaxErrorDiffusionKey} {settings.MaxErrorDiffusion}");
-                        if (settings.WaterFogColor != null) writer.Write($" {WaterFogColorKey} {SerializeColor(settings.WaterFogColor.Value)}");
-                        if (settings.WaterFogIntensity != null) writer.Write($" {WaterFogIntensityKey} {settings.WaterFogIntensity}");
+                        if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringAlgorithmKey}: {Serialize(settings.DitheringAlgorithm.Value)}");
+                        if (settings.DitherScale != null) writer.Write($" {DitherScaleKey}: {settings.DitherScale}");
+                        if (settings.TransparencyThreshold != null) writer.Write($" {TransparencyThresholdKey}: {settings.TransparencyThreshold}");
+                        if (settings.WaterFogColor != null) writer.Write($" {WaterFogColorKey}: {Serialize(settings.WaterFogColor.Value)}");
                     }
                     else
                     {
                         writer.Write($" {RemovedKey}");
                     }
-                    writer.WriteLine($" {TimestampKey} {rule.LastModified.ToUnixTimeMilliseconds()}");
+                    writer.WriteLine($" {TimestampKey}: {rule.LastModified.ToUnixTimeMilliseconds()}");
                 }
             }
         }
+
+        private static string Serialize(DitheringAlgorithm ditheringAlgorithm)
+        {
+            switch (ditheringAlgorithm)
+            {
+                default:
+                case DitheringAlgorithm.None: return "none";
+                case DitheringAlgorithm.FloydSteinberg: return "floyd-steinberg";
+            }
+        }
+
+        private static string Serialize(Rgba32 color) => $"{color.R} {color.G} {color.B} {color.A}";
     }
 }

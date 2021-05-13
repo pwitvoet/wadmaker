@@ -8,19 +8,18 @@ namespace WadMaker
     struct TextureSettings
     {
         /// <summary>
-        /// The number of cuts after which the median-cut color quantization algorithm will switch to a different strategy.
-        /// For the first few cuts, bounding boxes are selected on color count alone. After that, volume is taken into account,
-        /// to give rarer but still notable colors more chance.
-        /// Defaults to 32.
-        /// </summary>
-        public int? QuantizationVolumeSelectionThreshold { get; set; }
-
-        /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed texture.
         /// Defaults to <see cref="DitheringAlgorithm.FloydSteinberg"/> for normal textures,
         /// and to <see cref="DitheringAlgorithm.None"/> for animated textures (to prevent 'flickering' animations).
         /// </summary>
         public DitheringAlgorithm? DitheringAlgorithm { get; set; }
+
+        /// <summary>
+        /// When dithering is enabled, error diffusion is scaled by this factor (0 - 1).
+        /// Setting this too high can result in dithering artifacts, setting it too low essentially disables dithering, resulting in banding.
+        /// Defaults to 0.75.
+        /// </summary>
+        public float? DitherScale { get; set; }
 
         /// <summary>
         /// Pixels with an alpha value below this value will be ignored when the palette is created.
@@ -30,21 +29,9 @@ namespace WadMaker
         public int? TransparencyThreshold { get; set; }
 
         /// <summary>
-        /// The maximum amount of error that can be accumulated per channel.
-        /// This only affects Floyd-Steinberg dithering. Defaults to 255.
-        /// </summary>
-        public int? MaxErrorDiffusion { get; set; }
-
-        /// <summary>
-        /// Water fog color.
-        /// Defaults to the image's average color.
+        /// Water fog color (RGB) and intensity (A).
+        /// The fog color defaults to the image's average color, and the intensity defaults to the inverse of the fog color's brightness.
         /// </summary>
         public Rgba32? WaterFogColor { get; set; }
-
-        /// <summary>
-        /// Water fog intensity. Ranges from 0 (low intensity, increased view distance) to 255 (high intensity, reduced view distance).
-        /// Defaults to the inverse of the water fog color's brightness.
-        /// </summary>
-        public int? WaterFogIntensity { get; set; }
     }
 }
