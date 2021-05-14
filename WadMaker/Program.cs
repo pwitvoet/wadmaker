@@ -192,7 +192,7 @@ namespace WadMaker
             Console.WriteLine($"Removed {removedTextureCount} embedded textures from {bspFilePath} in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        static void MakeWad(string inputDirectory, string outputFilePath, bool fullRebuild, bool includeSubDirectories)
+        static void MakeWad(string inputDirectory, string outputWadFilePath, bool fullRebuild, bool includeSubDirectories)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -201,121 +201,157 @@ namespace WadMaker
             var texturesRemoved = 0;
 
             var wadMakingSettings = WadMakingSettings.Load(inputDirectory);
-            var updateExistingWad = !fullRebuild && File.Exists(outputFilePath);
-            var wad = updateExistingWad ? Wad.Load(outputFilePath) : new Wad();
-            var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputFilePath).LastWriteTimeUtc : (DateTime?)null;
+            var updateExistingWad = !fullRebuild && File.Exists(outputWadFilePath);
+            var wad = updateExistingWad ? Wad.Load(outputWadFilePath) : new Wad();
+            var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputWadFilePath).LastWriteTimeUtc : (DateTime?)null;
             var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
+            var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
 
             // Multiple files can map to the same texture, due to different extensions and upper/lower-case differences.
             // We'll group files by texture name, to make these collisions easy to detect:
             var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*", includeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToHashSet();
             var textureImagePaths = allInputDirectoryFiles
-                .Where(IsSupportedFiletype)
+                .Where(path => IsSupportedFiletype(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).Item1.Converter != null)
                 .Where(path => !path.Contains(".mipmap"))
+                .Where(path => !WadMakingSettings.IsConfigurationFile(path))
                 .GroupBy(path => Path.GetFileNameWithoutExtension(path).ToLowerInvariant());
 
             // Check for new and updated images:
-            foreach (var imagePaths in textureImagePaths)
+            try
             {
-                var textureName = imagePaths.Key;
-                if (!IsValidTextureName(textureName))
+                foreach (var imagePaths in textureImagePaths)
                 {
-                    Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePaths)}). Skipping file(s).");
-                    continue;
-                }
-                else if (textureName.Length > 16)
-                {
-                    Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePaths)}). Skipping file(s).");
-                    continue;
-                }
-                else if (imagePaths.Count() > 1)
-                {
-                    Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePaths)}). Skipping files.");
-                    continue;
-                }
-                // NOTE: Texture dimensions (which must be multiples of 16) are checked later, in CreateTextureFromImage.
-
-
-                var filePath = imagePaths.Single();
-                var isExistingImage = wadTextureNames.Contains(textureName);
-                (var textureSettings, var lastSettingsChangeTime) = wadMakingSettings.GetTextureSettings(textureName);
-                if (isExistingImage && updateExistingWad)
-                {
-                    // NOTE: A texture will not be rebuilt if one of its mipmap files has been removed. In order to detect such cases,
-                    //       WadMaker would need to store additional bookkeeping data, but right now that doesn't seem worth the trouble.
-                    // NOTE: Mipmaps must have the same extension as the main image file.
-                    var isImageUpdated = GetMipmapFilePaths(filePath)
-                        .Prepend(filePath)
-                        .Where(allInputDirectoryFiles.Contains)
-                        .Select(path => new FileInfo(path).LastWriteTimeUtc)
-                        .Any(dateTime => dateTime > lastWadUpdateTime);
-                    if (!isImageUpdated && lastSettingsChangeTime < lastWadUpdateTime)
+                    var textureName = imagePaths.Key;
+                    if (!IsValidTextureName(textureName))
                     {
-                        //Console.WriteLine($"No modifications detected for '{textureName}' ({filePath}). Skipping file.");
+                        Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePaths)}). Skipping file(s).");
                         continue;
                     }
+                    else if (textureName.Length > 16)
+                    {
+                        Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePaths)}). Skipping file(s).");
+                        continue;
+                    }
+                    else if (imagePaths.Count() > 1)
+                    {
+                        Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePaths)}). Skipping files.");
+                        continue;
+                    }
+                    // NOTE: Texture dimensions (which must be multiples of 16) are checked later, in CreateTextureFromImage.
+
+
+                    var filePath = imagePaths.Single();
+                    var isExistingImage = wadTextureNames.Contains(textureName);
+                    var isSupportedFileType = IsSupportedFiletype(filePath);
+
+                    // For files that are not directly supported, we'll include their extension when looking up conversion settings:
+                    (var textureSettings, var lastSettingsChangeTime) = wadMakingSettings.GetTextureSettings(isSupportedFileType ? textureName : Path.GetFileName(filePath));
+                    if (isExistingImage && updateExistingWad)
+                    {
+                        // NOTE: A texture will not be rebuilt if one of its mipmap files has been removed. In order to detect such cases,
+                        //       WadMaker would need to store additional bookkeeping data, but right now that doesn't seem worth the trouble.
+                        // NOTE: Mipmaps must have the same extension as the main image file.
+                        var isImageUpdated = GetMipmapFilePaths(filePath)
+                            .Prepend(filePath)
+                            .Where(allInputDirectoryFiles.Contains)
+                            .Select(path => new FileInfo(path).LastWriteTimeUtc)
+                            .Any(dateTime => dateTime > lastWadUpdateTime);
+                        if (!isImageUpdated && lastSettingsChangeTime < lastWadUpdateTime)
+                        {
+                            //Console.WriteLine($"No modifications detected for '{textureName}' ({filePath}). Skipping file.");
+                            continue;
+                        }
+                    }
+
+                    try
+                    {
+                        var imageFilePath = filePath;
+                        if (textureSettings.Converter != null)
+                        {
+                            if (textureSettings.ConverterArguments == null)
+                                throw new InvalidDataException($"Unable to convert '{filePath}': missing converter arguments.");
+
+                            imageFilePath = Path.Combine(conversionOutputDirectory, textureName + ".png");
+                            Directory.CreateDirectory(conversionOutputDirectory);
+
+                            ExecuteConversionCommand(
+                                textureSettings.Converter,
+                                textureSettings.ConverterArguments,
+                                filePath,
+                                imageFilePath);
+                        }
+
+                        // Create texture from image:
+                        var texture = CreateTextureFromImage(imageFilePath, textureSettings);
+
+                        if (isExistingImage)
+                        {
+                            // Update (replace) existing texture:
+                            for (int i = 0; i < wad.Textures.Count; i++)
+                            {
+                                if (wad.Textures[i].Name == texture.Name)
+                                {
+                                    wad.Textures[i] = texture;
+                                    break;
+                                }
+                            }
+                            texturesUpdated += 1;
+                            if (updateExistingWad)
+                                Console.WriteLine($"Updated texture '{textureName}' (from {filePath}).");
+                        }
+                        else
+                        {
+                            // Add new texture:
+                            wad.Textures.Add(texture);
+                            wadTextureNames.Add(textureName);
+                            texturesAdded += 1;
+                            Console.WriteLine($"Added texture '{textureName}' (from {filePath}).");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                    }
                 }
 
+                if (updateExistingWad)
+                {
+                    // Check for removed images:
+                    var directoryTextureNames = textureImagePaths
+                        .Select(group => group.Key)
+                        .ToHashSet();
+                    foreach (var textureName in wadTextureNames)
+                    {
+                        if (!directoryTextureNames.Contains(textureName))
+                        {
+                            // Delete texture:
+                            wad.Textures.Remove(wad.Textures.First(texture => texture.Name == textureName));
+                            texturesRemoved += 1;
+                            Console.WriteLine($"Removed texture '{textureName}'.");
+                        }
+                    }
+                }
+
+                // Finally, save the wad file:
+                wad.Save(outputWadFilePath);
+            }
+            finally
+            {
                 try
                 {
-                    // Create texture from image:
-                    var texture = CreateTextureFromImage(filePath, textureSettings);
-
-                    if (isExistingImage)
-                    {
-                        // Update (replace) existing texture:
-                        for (int i = 0; i < wad.Textures.Count; i++)
-                        {
-                            if (wad.Textures[i].Name == texture.Name)
-                            {
-                                wad.Textures[i] = texture;
-                                break;
-                            }
-                        }
-                        texturesUpdated += 1;
-                        if (updateExistingWad)
-                            Console.WriteLine($"Updated texture '{textureName}' (from {filePath}).");
-                    }
-                    else
-                    {
-                        // Add new texture:
-                        wad.Textures.Add(texture);
-                        wadTextureNames.Add(textureName);
-                        texturesAdded += 1;
-                        Console.WriteLine($"Added texture '{textureName}' (from {filePath}).");
-                    }
+                    if (Directory.Exists(conversionOutputDirectory))
+                        Directory.Delete(conversionOutputDirectory, true);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                    Console.WriteLine($"WARNING: Failed to delete temporary conversion output directory: {ex.GetType().Name}: '{ex.Message}'.");
                 }
             }
 
             if (updateExistingWad)
-            {
-                // Check for removed images:
-                var directoryTextureNames = textureImagePaths
-                    .Select(group => group.Key)
-                    .ToHashSet();
-                foreach (var textureName in wadTextureNames)
-                {
-                    if (!directoryTextureNames.Contains(textureName))
-                    {
-                        // Delete texture:
-                        wad.Textures.Remove(wad.Textures.First(texture => texture.Name == textureName));
-                        texturesRemoved += 1;
-                        Console.WriteLine($"Removed texture '{textureName}'.");
-                    }
-                }
-            }
-
-            // Finally, save the wad file:
-            wad.Save(outputFilePath);
-
-            if (updateExistingWad)
-                Console.WriteLine($"Updated {outputFilePath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Console.WriteLine($"Updated {outputWadFilePath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
             else
-                Console.WriteLine($"Created {outputFilePath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Console.WriteLine($"Created {outputWadFilePath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
 
@@ -455,6 +491,30 @@ namespace WadMaker
                     mipmap1Data: textureData[1],
                     mipmap2Data: textureData[2],
                     mipmap3Data: textureData[3]);
+            }
+        }
+
+        static void ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath)
+        {
+            var arguments = converterArguments.Replace("{input}", inputPath).Replace("{output}", outputPath).Trim();
+            Console.WriteLine($"Executing conversion command: '{converter} {arguments}'.");
+
+            var startInfo = new ProcessStartInfo(converter, arguments) {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+
+            using (var process = new Process { StartInfo = startInfo })
+            {
+                process.OutputDataReceived += (sender, e) => Console.WriteLine($"    INFO: {e.Data}");
+                process.ErrorDataReceived += (sender, e) => Console.WriteLine($"    ERROR: {e.Data}");
+                process.Start();
+                if (!process.WaitForExit(10_000))
+                    throw new TimeoutException("Conversion command did not finish within 10 seconds, .");
+
+                Console.WriteLine($"Conversion command finished with exit code: {process.ExitCode}.");
             }
         }
 

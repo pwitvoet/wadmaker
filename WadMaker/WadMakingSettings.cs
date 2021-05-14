@@ -21,8 +21,13 @@ namespace WadMaker
         const string DitherScaleKey = "dither-scale";
         const string TransparencyThresholdKey = "transparency-threshold";
         const string WaterFogColorKey = "water-fog";
+        const string ConverterKey = "converter";
+        const string ConverterArgumentsKey = "arguments";
         const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
+
+        const string ConfigFilename = "wadmaker.config";
+        const string TimestampFilename = "wadmaker.dat";
 
 
         class Rule
@@ -117,8 +122,8 @@ namespace WadMaker
         /// </summary>
         public static WadMakingSettings Load(string folder)
         {
-            var configFilePath = Path.Combine(folder, "wadmaker.config");
-            var timestampFilePath = Path.Combine(folder, "wadmaker.dat");
+            var configFilePath = Path.Combine(folder, ConfigFilename);
+            var timestampFilePath = Path.Combine(folder, TimestampFilename);
 
             // First read the timestamps file, which stores the last known state and modification time of each rule:
             var oldRules = new Dictionary<string, Rule>();
@@ -185,6 +190,13 @@ namespace WadMaker
             return new WadMakingSettings(newRules.Values);
         }
 
+        public static bool IsConfigurationFile(string path)
+        {
+            var filename = Path.GetFileName(path);
+            return filename == ConfigFilename || filename == TimestampFilename;
+        }
+
+
         private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
         {
             var tokens = GetTokens(line).ToArray();
@@ -192,7 +204,7 @@ namespace WadMaker
                 return null;
 
             var i = 0;
-            var namePattern = Path.GetFileNameWithoutExtension(tokens[i++]).ToLowerInvariant();
+            var namePattern = Path.GetFileName(tokens[i++]).ToLowerInvariant();
             var textureSettings = new TextureSettings();
             var isRemoved = false;
             DateTimeOffset? ruleTimestamp = null;
@@ -247,6 +259,18 @@ namespace WadMaker
                         textureSettings.WaterFogColor = new Rgba32(ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse));
                         break;
 
+                    case ConverterKey:
+                        RequireToken(":");
+                        textureSettings.Converter = ParseToken(s => s, "converter command string");
+                        break;
+
+                    case ConverterArgumentsKey:
+                        RequireToken(":");
+                        textureSettings.ConverterArguments = ParseToken(s => s, "converter arguments string");
+                        if (!textureSettings.ConverterArguments.Contains("{input}") || !textureSettings.ConverterArguments.Contains("{output}"))
+                            throw new InvalidDataException("Converter arguments must contain {input} and {output} placeholders.");
+                        break;
+
                     default:
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
@@ -279,10 +303,20 @@ namespace WadMaker
         private static IEnumerable<string> GetTokens(string line)
         {
             var start = 0;
+            var isString = false;
             for (int i = 0; i < line.Length; i++)
             {
                 var c = line[i];
-                if (char.IsWhiteSpace(c))
+                if (isString)
+                {
+                    if (c == '\'' && line[i - 1] != '\\')
+                    {
+                        yield return Token(i).Replace(@"\'", "'");
+                        start = i + 1;
+                        isString = false;
+                    }
+                }
+                else if (char.IsWhiteSpace(c))
                 {
                     if (i > start) yield return Token(i);
                     start = i + 1;
@@ -299,8 +333,15 @@ namespace WadMaker
                     yield return "//";
                     start = i + 1;
                 }
+                else if (c == '\'')
+                {
+                    if (i > start) yield return Token(i);
+                    start = i + 1;
+                    isString = true;
+                }
             }
 
+            if (isString) throw new InvalidDataException($"Expected a ' but found end of line.");
             if (start < line.Length) yield return Token(line.Length);
 
             string Token(int end) => line.Substring(start, end - start);
@@ -334,6 +375,8 @@ namespace WadMaker
                         if (settings.DitherScale != null) writer.Write($" {DitherScaleKey}: {settings.DitherScale}");
                         if (settings.TransparencyThreshold != null) writer.Write($" {TransparencyThresholdKey}: {settings.TransparencyThreshold}");
                         if (settings.WaterFogColor != null) writer.Write($" {WaterFogColorKey}: {Serialize(settings.WaterFogColor.Value)}");
+                        if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
+                        if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
                     }
                     else
                     {
