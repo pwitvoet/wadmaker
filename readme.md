@@ -2,12 +2,12 @@
 *"I certainly hope you know wad you're doing!"*
 
 ## Table of contents
-- [Overview] (#overview)
-- [How to use] (#how-to-use)
-    - [Basic usage] (#basic-usage)
-    - [Advanced options] (#advanced-options)
-    - [Texture-specific settings] (#texture-specific-settings)
-- [Comparisons] (#comparisons)
+- [Overview](#overview)
+- [How to use](#how-to-use)
+    - [Basic usage](#basic-usage)
+    - [Advanced options](#advanced-options)
+    - [Texture-specific settings](#texture-specific-settings)
+- [Comparisons](#comparisons)
 
 ## Overview
 WadMaker is a command-line tool that can turn directories that contain images into Half-Life wad files. Existing wad files can be updated more quickly because only added, modified and removed images are processed by default. WadMaker can also extract textures from wad and bsp files, or remove embedded textures from bsp files.
