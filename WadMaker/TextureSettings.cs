@@ -29,6 +29,13 @@ namespace WadMaker
         public int? TransparencyThreshold { get; set; }
 
         /// <summary>
+        /// Pixels with this color will be ignored when the palette is created.
+        /// For color-keyed textures (whose name must start with a '{'), they will be mapped to the last color in the palette.
+        /// This is not used by default.
+        /// </summary>
+        public Rgba32? TransparencyColor { get; set; }
+
+        /// <summary>
         /// Water fog color (RGB) and intensity (A).
         /// The fog color defaults to the image's average color, and the intensity defaults to the inverse of the fog color's brightness.
         /// </summary>

@@ -20,6 +20,7 @@ namespace WadMaker
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
         const string TransparencyThresholdKey = "transparency-threshold";
+        const string TransparencyColorKey = "transparency-color";
         const string WaterFogColorKey = "water-fog";
         const string ConverterKey = "converter";
         const string ConverterArgumentsKey = "arguments";
@@ -254,6 +255,11 @@ namespace WadMaker
                         textureSettings.TransparencyThreshold = ParseToken(byte.Parse, "transparency threshold");
                         break;
 
+                    case TransparencyColorKey:
+                        RequireToken(":");
+                        textureSettings.TransparencyColor = new Rgba32(ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse));
+                        break;
+
                     case WaterFogColorKey:
                         RequireToken(":");
                         textureSettings.WaterFogColor = new Rgba32(ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse));
@@ -374,6 +380,7 @@ namespace WadMaker
                         if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringAlgorithmKey}: {Serialize(settings.DitheringAlgorithm.Value)}");
                         if (settings.DitherScale != null) writer.Write($" {DitherScaleKey}: {settings.DitherScale}");
                         if (settings.TransparencyThreshold != null) writer.Write($" {TransparencyThresholdKey}: {settings.TransparencyThreshold}");
+                        if (settings.TransparencyColor != null) writer.Write($" {TransparencyColorKey}: {Serialize(settings.TransparencyColor.Value, false)}");
                         if (settings.WaterFogColor != null) writer.Write($" {WaterFogColorKey}: {Serialize(settings.WaterFogColor.Value)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
@@ -397,6 +404,6 @@ namespace WadMaker
             }
         }
 
-        private static string Serialize(Rgba32 color) => $"{color.R} {color.G} {color.B} {color.A}";
+        private static string Serialize(Rgba32 color, bool includeAplha = true) => $"{color.R} {color.G} {color.B}" + (includeAplha ? $" {color.A}" : "");
     }
 }

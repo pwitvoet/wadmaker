@@ -421,9 +421,18 @@ namespace WadMaker
 
                 // Create a suitable palette, taking special texture types into account:
                 var transparencyThreshold = isTransparentTexture ? Math.Clamp(textureSettings.TransparencyThreshold ?? 128, 0, 255) : 0;
-                bool isTransparentPredicate(Rgba32 color) => color.A < transparencyThreshold;
-                var colorHistogram = ColorQuantization.GetColorHistogram(images.Where(image => image != null), isTransparentPredicate);
+                Func<Rgba32, bool> isTransparentPredicate = null;
+                if (textureSettings.TransparencyColor != null)
+                {
+                    var transparencyColor = textureSettings.TransparencyColor.Value;
+                    isTransparentPredicate = color => color.A < transparencyThreshold || (color.R == transparencyColor.R && color.G == transparencyColor.G && color.B == transparencyColor.B);
+                }
+                else
+                {
+                    isTransparentPredicate = color => color.A < transparencyThreshold;
+                }
 
+                var colorHistogram = ColorQuantization.GetColorHistogram(images.Where(image => image != null), isTransparentPredicate);
                 var maxColors = 256 - (isTransparentTexture ? 1 : 0) - (isWaterTexture ? 2 : 0);
                 var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
 
