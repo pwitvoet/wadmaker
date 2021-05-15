@@ -4,6 +4,12 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <StartupObject>WadMaker.Program</StartupObject>
+    <Authors>Pieter Witvoet</Authors>
+    <Company />
+    <Description>A command-line tool that can turn directories that contain images into Half-Life wad files.</Description>
+    <Copyright>Copyright © Pieter Witvoet 2021</Copyright>
+    <PackageProjectUrl>https://github.com/pwitvoet/wadmaker</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/pwitvoet/wadmaker</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
