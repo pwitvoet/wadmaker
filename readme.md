@@ -55,17 +55,18 @@ The following settings can be configured per texture:
 - **transparency-threshold** - A value between 0 and 255. The default is 128. Any pixel whose alpha value is below this threshold will be marked as transparent. This only applies to textures whose name starts with a `{`.
 - **transparency-color** - A color, written as 3 whitespace-separated numbers (`red green blue`), with each number between 0 and 255. Pixels with this color will be marked as transparent. This only applies to textures whose name starts with a `{`. By default, no color is specified.
 - **water-fog** - The water fog color and intensity, written as 4 whitespace-separated numbers (`red green blue intensity`), with each number between 0 and 255. By default, the fog color and intensity are derived from the average color of the image. This only applies to textures whose name starts with a `!`.
-- **converter** - The path of an application that can convert a file into a png file.
-- **arguments** - The arguments that will be passed to the converter application. This must contain the placeholders `{input}` and `{output}`. WadMaker will replace `{input}` with the path of the current file, and `{output}` with a path where the converter tool must save its output. This output file is then used to create a texture.
+- **converter** - The path of an application that can convert a file into a png file. If the path contains spaces then it should be surrounded by double quotes. The whole path, including any double quotes, must be delimited by single quotes. Any single quotes in the path itself must be escaped with a `\`. For example, the path `C:\what's that.exe` should be written as `'"C:\what\'s that.exe"'`.
+- **arguments** - The arguments that will be passed to the converter application, surrounded by single quotes. This must contain the placeholders `{input}` and `{output}`. WadMaker will replace `{input}` with the path of the current file, and `{output}` with a path where the converter tool must save its output. This output file is then used to create a texture. As with the `converter` setting, the whole arguments list must be delimited by single quotes, and any path that contains spaces (including `{input}` and `{output}`) should be surrounded by double quotes.
 
 ## Comparisons
 Just like Wally, WadMaker can convert true-color images to the 256-color indexed format that Half-Life uses. For textures that do not contain a wide range of colors and gradients, this often does not lead to a perceptible loss of quality. In cases where this does matter, WadMaker tends to produce better results than Wally due to its use of dithering, but it does worse than IrfanView:
+
 ![input, WadMaker, IrfanView, Wally](/documentation/images/comparison.png "input, WadMaker, IrfanView, Wally")
 *(free texture downloaded from https://textures.pixel-furnace.com, scaled-down to 256x256 pixels)*
 
 This is one reason why WadMaker provides a converter setting: to make it possible to let IrfanView or another application handle the color reduction, while WadMaker takes care of the actual wad file making. Simply add the following line to your `wadmaker.config` file:
 
-    if_*    converter: '"C:\Program Files\IrfanView\i_view64.exe"' arguments: '"{input}" /bpp=8 /convert="{output}"'
+    if_*    converter: '"C:\Program Files\IrfanView\i_view64.exe"' arguments: '"{input}" /silent /bpp=8 /convert="{output}"'
 Or, when using advanced batch settings, save those settings to a `i_view64.ini` file, and specify the directory in which that ini file is located:
 
     if_*    converter: '"C:\Program Files\IrfanView\i_view64.exe"' arguments: '"{input}" /silent /ini="C:\custom_irfanview_settings_dir" /advancedbatch /convert="{output}"'
