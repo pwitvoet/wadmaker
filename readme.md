@@ -10,6 +10,7 @@
     - [Texture-specific settings](#texture-specific-settings)
 - [About Half-Life textures](#about-half-life-textures)
 - [Comparisons](#comparisons)
+- [Libraries](#libraries)
 
 ## Overview
 WadMaker is a command-line tool that can turn directories that contain images into Half-Life wad files. Existing wad files can be updated more quickly because only added, modified and removed images are processed by default. WadMaker can also extract textures from wad and bsp files, or remove embedded textures from bsp files.
@@ -92,3 +93,6 @@ Or, when using advanced batch settings, save those settings to a `i_view64.ini` 
 
     if_*    converter: '"C:\Program Files\IrfanView\i_view64.exe"' arguments: '"{input}" /silent /ini="C:\custom_irfanview_settings_dir" /advancedbatch /convert="{output}"'
 The `if_*` name pattern here means that any image file whose name starts with `if_` will be processed by IrfanView, so switching between standard WadMaker and IrfanView behavior can be done by simply renaming an image.
+
+## Libraries
+WadMaker uses the ImageSharp library, which is licensed under the Apache License 2.0.
