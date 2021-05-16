@@ -58,7 +58,7 @@ namespace WadMaker
             filename = filename.ToLowerInvariant();
 
             // Rules without wildcards are the most specific, so they get priority:
-            var timestamp = DateTimeOffset.UnixEpoch;
+            var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(0);
             if (_exactRules.TryGetValue(filename, out var rule))
             {
                 if (rule.TextureSettings != null)
@@ -132,7 +132,7 @@ namespace WadMaker
             {
                 foreach (var line in File.ReadAllLines(timestampFilePath))
                 {
-                    var rule = ParseRuleLine(line, DateTimeOffset.UnixEpoch, true);
+                    var rule = ParseRuleLine(line, DateTimeOffset.FromUnixTimeMilliseconds(0), true);
                     if (rule != null)
                         oldRules[rule.NamePattern] = rule;
                 }

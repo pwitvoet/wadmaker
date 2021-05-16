@@ -28,7 +28,7 @@ namespace WadMaker
         {
             var output = new byte[image.Width * image.Height];
 
-            ditherScale = Math.Clamp(ditherScale, 0f, 1f);
+            ditherScale = Math.Max(0f, Math.Min(ditherScale, 1f));
             var lastRowErrors = new int[image.Width, 3];
             var currentRowErrors = new int[image.Width, 3];
             for (int y = 0; y < image.Height; y++)

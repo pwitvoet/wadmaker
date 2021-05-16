@@ -72,7 +72,7 @@ namespace WadMaker
 
             // First parse options:
             var index = 0;
-            while (index < args.Length && args[index].StartsWith('-'))
+            while (index < args.Length && args[index].StartsWith("-"))
             {
                 var arg = args[index++];
                 switch (arg)
@@ -358,7 +358,7 @@ namespace WadMaker
         // Wad extraction:
         static Image<Rgba32> TextureToImage(Texture texture, int mipmap = 0)
         {
-            var hasColorKey = texture.Name.StartsWith('{');
+            var hasColorKey = texture.Name.StartsWith("{");
 
             var image = new Image<Rgba32>(texture.Width, texture.Height);
             for (int y = 0; y < image.Height; y++)
@@ -403,7 +403,7 @@ namespace WadMaker
         {
             // Load the main texture image, and any available mipmap images:
             using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
-                .Select(path => File.Exists(path) ? Image.Load<Rgba32>(path) : null)))
+                .Select(imagePath => File.Exists(imagePath) ? Image.Load<Rgba32>(imagePath) : null)))
             {
                 // Verify image sizes:
                 if (images[0].Width % 16 != 0 || images[0].Height % 16 != 0)
@@ -415,12 +415,12 @@ namespace WadMaker
 
 
                 var filename = Path.GetFileName(path);
-                var isTransparentTexture = filename.StartsWith('{');
+                var isTransparentTexture = filename.StartsWith("{");
                 var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(filename);
-                var isWaterTexture = filename.StartsWith('!');
+                var isWaterTexture = filename.StartsWith("!");
 
                 // Create a suitable palette, taking special texture types into account:
-                var transparencyThreshold = isTransparentTexture ? Math.Clamp(textureSettings.TransparencyThreshold ?? 128, 0, 255) : 0;
+                var transparencyThreshold = isTransparentTexture ? Clamp(textureSettings.TransparencyThreshold ?? 128, 0, 255) : 0;
                 Func<Rgba32, bool> isTransparentPredicate = null;
                 if (textureSettings.TransparencyColor != null)
                 {
@@ -450,7 +450,7 @@ namespace WadMaker
                 if (isWaterTexture)
                 {
                     var fogColor = textureSettings.WaterFogColor ?? GetAverageColor(colorHistogram);
-                    var fogIntensity = new Rgba32((byte)Math.Clamp(textureSettings.WaterFogColor?.A ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
+                    var fogIntensity = new Rgba32((byte)Clamp(textureSettings.WaterFogColor?.A ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
 
                     colorClusters = colorClusters.Take(3)
                         .Append((fogColor, new[] { fogColor }))         // Slot 3: water fog color
@@ -543,7 +543,7 @@ namespace WadMaker
             if (totalWeight <= 0)
                 return new Rgba32();
 
-            return new Rgba32((byte)Math.Clamp(r / totalWeight, 0, 255), (byte)Math.Clamp(g / totalWeight, 0, 255), (byte)Math.Clamp(b / totalWeight, 0, 255));
+            return new Rgba32((byte)Clamp((int)(r / totalWeight), 0, 255), (byte)Clamp((int)(g / totalWeight), 0, 255), (byte)Clamp((int)(b / totalWeight), 0, 255));
         }
 
         static int GetBrightness(Rgba32 color) => (int)(color.R * 0.21 + color.G * 0.72 + color.B * 0.07);
@@ -586,5 +586,7 @@ namespace WadMaker
                 return textureData;
             }
         }
+
+        static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
     }
 }
