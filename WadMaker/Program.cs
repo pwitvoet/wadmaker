@@ -227,7 +227,7 @@ namespace WadMaker
                         Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePaths)}). Skipping file(s).");
                         continue;
                     }
-                    else if (textureName.Length > 16)
+                    else if (textureName.Length > 15)
                     {
                         Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePaths)}). Skipping file(s).");
                         continue;
