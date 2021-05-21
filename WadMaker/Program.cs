@@ -241,7 +241,7 @@ namespace WadMaker
 
 
                     var filePath = imagePaths.Single();
-                    var isExistingImage = wadTextureNames.Contains(textureName);
+                    var isExistingImage = wadTextureNames.Contains(textureName.ToLowerInvariant());
                     var isSupportedFileType = IsSupportedFiletype(filePath);
 
                     // For files that are not directly supported, we'll include their extension when looking up conversion settings:
@@ -325,7 +325,7 @@ namespace WadMaker
                         if (!directoryTextureNames.Contains(textureName))
                         {
                             // Delete texture:
-                            wad.Textures.Remove(wad.Textures.First(texture => texture.Name == textureName));
+                            wad.Textures.Remove(wad.Textures.First(texture => texture.Name.ToLowerInvariant() == textureName));
                             texturesRemoved += 1;
                             Console.WriteLine($"Removed texture '{textureName}'.");
                         }
