@@ -55,33 +55,39 @@ namespace WadMaker
         /// </summary>
         public (TextureSettings, DateTimeOffset) GetTextureSettings(string filename)
         {
-            filename = filename.ToLowerInvariant();
-
-            // Rules without wildcards are the most specific, so they get priority:
+            var textureSettings = new TextureSettings();
             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(0);
-            if (_exactRules.TryGetValue(filename, out var rule))
+            foreach (var rule in GetMatchingRules(filename))
             {
-                if (rule.TextureSettings != null)
-                    return (rule.TextureSettings.Value, rule.LastModified);
-                else if (rule.LastModified > timestamp)
+                if (rule.TextureSettings is TextureSettings ruleSettings)
+                {
+                    // More specific rules override settings defined by less specific rules:
+                    if (ruleSettings.DitheringAlgorithm != null)    textureSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
+                    if (ruleSettings.DitherScale != null)           textureSettings.DitherScale = ruleSettings.DitherScale;
+                    if (ruleSettings.TransparencyThreshold != null) textureSettings.TransparencyThreshold = ruleSettings.TransparencyThreshold;
+                    if (ruleSettings.TransparencyColor != null)     textureSettings.TransparencyColor = ruleSettings.TransparencyColor;
+                    if (ruleSettings.WaterFogColor != null)         textureSettings.WaterFogColor = ruleSettings.WaterFogColor;
+                    if (ruleSettings.Converter != null)             textureSettings.Converter = ruleSettings.Converter;
+                    if (ruleSettings.ConverterArguments != null)    textureSettings.ConverterArguments = ruleSettings.ConverterArguments;
+                }
+
+                if (rule.LastModified > timestamp)
                     timestamp = rule.LastModified;
             }
+            return (textureSettings, timestamp);
+        }
 
-            // Wildcard rules are sorted based on the number of non-wildcard characters (with the catch-all '*' pattern coming last):
+        // Returns all rules that match the given filename, from least to most specific.
+        private IEnumerable<Rule> GetMatchingRules(string filename)
+        {
+            filename = filename.ToLowerInvariant();
+
             foreach ((var regex, var wildcardRule) in _wildcardRules)
-            {
                 if (regex.IsMatch(filename))
-                {
-                    if (wildcardRule.TextureSettings != null)
-                        return (wildcardRule.TextureSettings.Value, wildcardRule.LastModified);
-                    else if (wildcardRule.LastModified > timestamp)
-                        timestamp = wildcardRule.LastModified;
-                }
-            }
+                    yield return wildcardRule;
 
-            // No specific settings for this file. If there used to be rules that applied to this file,
-            // then the timestamp will tell us when the last such rule was removed:
-            return (new TextureSettings(), timestamp);
+            if (_exactRules.TryGetValue(filename, out var rule))
+                yield return rule;
         }
 
 
@@ -97,7 +103,7 @@ namespace WadMaker
 
             // We'll treat longer patterns (excluding wildcard characters) as more specific, and give them priority:
             _wildcardRules = _wildcardRules
-                .OrderByDescending(regexRule => regexRule.Item2.NamePattern.Count(c => c != '*'))
+                .OrderBy(regexRule => regexRule.Item2.NamePattern.Count(c => c != '*'))
                 .ToList();
         }
 
