@@ -1,7 +1,6 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using WadMaker.FileFormats;
 
 namespace WadMaker
 {
@@ -211,7 +211,7 @@ namespace WadMaker
             // We'll group files by texture name, to make these collisions easy to detect:
             var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*", includeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToHashSet();
             var textureImagePaths = allInputDirectoryFiles
-                .Where(path => IsSupportedFiletype(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).Item1.Converter != null)
+                .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).Item1.Converter != null)
                 .Where(path => !path.Contains(".mipmap"))
                 .Where(path => !WadMakingSettings.IsConfigurationFile(path))
                 .GroupBy(path => Path.GetFileNameWithoutExtension(path).ToLowerInvariant());
@@ -242,7 +242,7 @@ namespace WadMaker
 
                     var filePath = imagePaths.Single();
                     var isExistingImage = wadTextureNames.Contains(textureName.ToLowerInvariant());
-                    var isSupportedFileType = IsSupportedFiletype(filePath);
+                    var isSupportedFileType = ImageReading.IsSupported(filePath);
 
                     // For files that are not directly supported, we'll include their extension when looking up conversion settings:
                     (var textureSettings, var lastSettingsChangeTime) = wadMakingSettings.GetTextureSettings(isSupportedFileType ? textureName : Path.GetFileName(filePath));
@@ -386,13 +386,6 @@ namespace WadMaker
         // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, parenthesis, etc.?)
         static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256 && c != ' ');
 
-        static bool IsSupportedFiletype(string path)
-        {
-            var extension = Path.GetExtension(path).TrimStart('.');
-            return Configuration.Default.ImageFormats
-                .Any(format => format.FileExtensions.Contains(extension));
-        }
-
         static IEnumerable<string> GetMipmapFilePaths(string path)
         {
             for (int mipmap = 1; mipmap <= 3; mipmap++)
@@ -403,7 +396,7 @@ namespace WadMaker
         {
             // Load the main texture image, and any available mipmap images:
             using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
-                .Select(imagePath => File.Exists(imagePath) ? Image.Load<Rgba32>(imagePath) : null)))
+                .Select(imagePath => File.Exists(imagePath) ? ImageReading.ReadImage(imagePath) : null)))
             {
                 // Verify image sizes:
                 if (images[0].Width % 16 != 0 || images[0].Height % 16 != 0)
