@@ -8,14 +8,15 @@ using System.Linq;
 namespace WadMaker.FileFormats
 {
     // TODO: I've only been able to test RGB and Grayscale so far, not Bitmap and Indexed!
+    // TODO: I also haven't found any files that us the zip/zip-with-prediction compression methods.
 
     /// <summary>
-    /// An image reader for Photoshop (.psd) files.
+    /// An image reader for Photoshop (.psd, .psb) files.
     /// Works by reading the embedded composite image, which is only available in files that have been saved with 'maximize compatibility' enabled.
     /// </summary>
     class PsdReader : IImageReader
     {
-        public string[] SupportedExtensions => new[] { "psd" };
+        public string[] SupportedExtensions => new[] { "psd", "psb" };
 
 
         public Image<Rgba32> ReadImage(string path)
@@ -29,10 +30,11 @@ namespace WadMaker.FileFormats
         {
             // Header:
             var signature = stream.ReadString(4);
-            if (signature != "8BPS") throw new InvalidDataException($"Invalid .psd file signature: '{signature}'.");
+            if (signature != "8BPS") throw new InvalidDataException($"Invalid file signature: '{signature}'.");
 
             var version = ReadShortBigEndian(stream);
-            if (version != 1) throw new NotSupportedException($"Unsupported .psd version: {version}.");
+            if (version != 1 && version != 2) throw new NotSupportedException($"Unsupported file version: {version}.");
+            var isBigFile = version == 2;
 
             stream.Seek(6, SeekOrigin.Current); // Reserved bytes
 
@@ -66,19 +68,19 @@ namespace WadMaker.FileFormats
 
 
             // Layer and mask information:
-            var layersAndMasksLength = ReadIntBigEndian(stream);
+            var layersAndMasksLength = isBigFile ? ReadLongBigEndian(stream) : ReadIntBigEndian(stream);
             stream.Seek(layersAndMasksLength, SeekOrigin.Current);
 
 
             // The composite image is stored at the end, but only if 'maximize compatibility' is enabled:
             if (stream.Position >= stream.Length) throw new InvalidDataException($"No composite image found.");
-            return ReadCompositeImage(stream, channelCount, width, height, depth, colorMode, palette);
+            return ReadCompositeImage(stream, channelCount, width, height, depth, colorMode, palette, isBigFile);
         }
 
-        private static Image<Rgba32> ReadCompositeImage(Stream stream, short channelCount, int width, int height, short depth, ColorMode colorMode, Rgba32[] palette)
+        private static Image<Rgba32> ReadCompositeImage(Stream stream, short channelCount, int width, int height, short depth, ColorMode colorMode, Rgba32[] palette, bool isBigFile)
         {
             var compressionMethod = (CompressionMethod)ReadShortBigEndian(stream);
-            var channelData = ReadChannelData(stream, channelCount, width, height, depth, compressionMethod);
+            var channelData = ReadChannelData(stream, channelCount, width, height, depth, compressionMethod, isBigFile);
             var getValue = GetValueFunction(depth, channelData);
             var getColor = GetColorFunction(colorMode, channelCount, palette, getValue);
 
@@ -95,7 +97,7 @@ namespace WadMaker.FileFormats
         }
 
         // Result format: channelData[channel][y][..x..]
-        private static byte[][][] ReadChannelData(Stream stream, short channelCount, int width, int height, short depth, CompressionMethod compressionMethod)
+        private static byte[][][] ReadChannelData(Stream stream, short channelCount, int width, int height, short depth, CompressionMethod compressionMethod, bool isBigFile)
         {
             switch (compressionMethod)
             {
@@ -113,7 +115,7 @@ namespace WadMaker.FileFormats
                 {
                     var scanlineLengths = Enumerable.Range(0, channelCount)
                         .Select(channel => Enumerable.Range(0, height)
-                            .Select(row => ReadShortBigEndian(stream))
+                            .Select(row => isBigFile ? ReadIntBigEndian(stream) : ReadShortBigEndian(stream))
                             .ToArray())
                         .ToArray();
 
@@ -256,6 +258,12 @@ namespace WadMaker.FileFormats
         {
             var data = stream.ReadBytes(2);
             return (short)((data[0] << 8) | data[1]);
+        }
+
+        private static long ReadLongBigEndian(Stream stream)
+        {
+            var data = stream.ReadBytes(8);
+            return ((long)data[0] << 56) | ((long)data[1] << 48) | ((long)data[2] << 40) | ((long)data[3] << 32) | ((long)data[4] << 24) | ((long)data[5] << 16) | ((long)data[6] << 8) | (long)data[7];
         }
 
 
