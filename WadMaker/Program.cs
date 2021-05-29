@@ -532,6 +532,7 @@ namespace WadMaker
                 r += kv.Key.R * kv.Value;
                 g += kv.Key.G * kv.Value;
                 b += kv.Key.B * kv.Value;
+                totalWeight += kv.Value;
             }
             if (totalWeight <= 0)
                 return new Rgba32();
