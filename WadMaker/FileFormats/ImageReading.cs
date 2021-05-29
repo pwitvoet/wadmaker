@@ -16,6 +16,7 @@ namespace WadMaker.FileFormats
             _imageReaders = new IImageReader[] {
                 new ImageReader(),
                 new KraReader(),
+                new PsdReader(),
             };
 
             _extensionReaderMapping = new Dictionary<string, IImageReader>();

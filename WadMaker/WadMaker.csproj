@@ -72,6 +72,7 @@
     <Compile Include="FileFormats\ImageReader.cs" />
     <Compile Include="FileFormats\ImageReading.cs" />
     <Compile Include="FileFormats\KraReader.cs" />
+    <Compile Include="FileFormats\PsdReader.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="StreamExtensions.cs" />
