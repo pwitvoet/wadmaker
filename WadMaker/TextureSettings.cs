@@ -2,6 +2,13 @@
 
 namespace WadMaker
 {
+    enum DecalTransparency
+    {
+        Alpha,
+        Grayscale,
+    }
+
+
     /// <summary>
     /// Settings for converting an image to a texture.
     /// </summary>
@@ -21,6 +28,7 @@ namespace WadMaker
         /// </summary>
         public float? DitherScale { get; set; }
 
+
         /// <summary>
         /// Pixels with an alpha value below this value will be ignored when the palette is created.
         /// For color-keyed textures (whose name must start with a '{'), they will be mapped to the last color in the palette.
@@ -35,11 +43,26 @@ namespace WadMaker
         /// </summary>
         public Rgba32? TransparencyColor { get; set; }
 
+
         /// <summary>
         /// Water fog color (RGB) and intensity (A).
         /// The fog color defaults to the image's average color, and the intensity defaults to the inverse of the fog color's brightness.
         /// </summary>
         public Rgba32? WaterFogColor { get; set; }
+
+
+        /// <summary>
+        /// The channel that determines the decal transparency.
+        /// Defaults to <see cref="DecalTransparency.Alpha"/>.
+        /// </summary>
+        public DecalTransparency? DecalTransparency { get; set; }
+
+        /// <summary>
+        /// Decal color (RGB).
+        /// The decal color defaults to the image's average color.
+        /// </summary>
+        public Rgba32? DecalColor { get; set; }
+
 
         /// <summary>
         /// The command-line application that WadMaker will call to convert the current file.

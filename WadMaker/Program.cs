@@ -148,6 +148,7 @@ namespace WadMaker
 
             Directory.CreateDirectory(outputDirectory);
 
+            var isDecalsWad = Path.GetFileName(inputFilePath).ToLowerInvariant() == "decals.wad";
             foreach (var texture in textures)
             {
                 var maxMipmap = extractMipmaps ? 4 : 1;
@@ -162,7 +163,7 @@ namespace WadMaker
                             continue;
                         }
 
-                        using (var image = TextureToImage(texture, mipmap))
+                        using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
                         {
                             image.SaveAsPng(filePath);
                             imageFilesCreated += 1;
@@ -206,6 +207,7 @@ namespace WadMaker
             var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputWadFilePath).LastWriteTimeUtc : (DateTime?)null;
             var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
             var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
+            var isDecalsWad = Path.GetFileNameWithoutExtension(outputWadFilePath).ToLowerInvariant() == "decals";
 
             // Multiple files can map to the same texture, due to different extensions and upper/lower-case differences.
             // We'll group files by texture name, to make these collisions easy to detect:
@@ -282,7 +284,7 @@ namespace WadMaker
                         }
 
                         // Create texture from image:
-                        var texture = CreateTextureFromImage(imageFilePath, textureSettings);
+                        var texture = CreateTextureFromImage(imageFilePath, textureSettings, isDecalsWad);
 
                         if (isExistingImage)
                         {
@@ -356,6 +358,24 @@ namespace WadMaker
 
 
         // Wad extraction:
+        static Image<Rgba32> DecalTextureToImage(Texture texture, int mipmap = 0)
+        {
+            var decalColor = texture.Palette[255];
+
+            var image = new Image<Rgba32>(texture.Width, texture.Height);
+            for (int y = 0; y < image.Height; y++)
+            {
+                var rowSpan = image.GetPixelRowSpan(y);
+                for (int x = 0; x < image.Width; x++)
+                {
+                    var paletteIndex = texture.ImageData[y * texture.Width + x];
+                    rowSpan[x] = new Rgba32(decalColor.R, decalColor.G, decalColor.B, paletteIndex);
+                }
+            }
+
+            return image;
+        }
+
         static Image<Rgba32> TextureToImage(Texture texture, int mipmap = 0)
         {
             var hasColorKey = texture.Name.StartsWith("{");
@@ -392,7 +412,7 @@ namespace WadMaker
                 yield return Path.ChangeExtension(path, $".mipmap{mipmap}{Path.GetExtension(path)}");
         }
 
-        static Texture CreateTextureFromImage(string path, TextureSettings textureSettings)
+        static Texture CreateTextureFromImage(string path, TextureSettings textureSettings, bool isDecalsWad)
         {
             // Load the main texture image, and any available mipmap images:
             using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
@@ -405,6 +425,9 @@ namespace WadMaker
                 for (int i = 1; i < images.Count; i++)
                     if (images[i] != null && (images[i].Width != images[0].Width >> i || images[i].Height != images[0].Height >> i))
                         throw new InvalidDataException($"Mipmap {i} for texture '{path}' width or height does not match texture size.");
+
+                if (isDecalsWad)
+                    return CreateDecalTexture(Path.GetFileNameWithoutExtension(path), images.ToArray(), textureSettings);
 
 
                 var filename = Path.GetFileName(path);
@@ -473,7 +496,7 @@ namespace WadMaker
                 }
 
                 // Create any missing mipmaps:
-                for (int i = 0; i < images.Count; i++)
+                for (int i = 1; i < images.Count; i++)
                 {
                     if (images[i] == null)
                         images[i] = images[0].Clone(context => context.Resize(images[0].Width >> i, images[0].Height >> i));
@@ -493,6 +516,57 @@ namespace WadMaker
                     mipmap1Data: textureData[1],
                     mipmap2Data: textureData[2],
                     mipmap3Data: textureData[3]);
+            }
+        }
+
+        static Texture CreateDecalTexture(string name, Image<Rgba32>[] images, TextureSettings textureSettings)
+        {
+            // Create any missing mipmaps (this does not affect the palette, so it can be done up-front):
+            for (int i = 1; i < images.Length; i++)
+            {
+                if (images[i] == null)
+                    images[i] = images[0].Clone(context => context.Resize(images[0].Width >> i, images[0].Height >> i));
+            }
+
+            // The last palette color determines the color of the decal. All other colors are irrelevant - palette indexes are treated as alpha values instead.
+            var decalColor = textureSettings.DecalColor ?? GetAverageColor(ColorQuantization.GetColorHistogram(images, color => color.A == 0));
+            var palette = Enumerable.Range(0, 255)
+                .Select(i => new Rgba32((byte)i, (byte)i, (byte)i))
+                .Append(decalColor)
+                .ToArray();
+
+            var textureData = images
+                .Select(CreateDecalTextureData)
+                .ToArray();
+
+            return Texture.CreateMipmapTexture(
+                name: name,
+                width: images[0].Width,
+                height: images[0].Height,
+                imageData: textureData[0],
+                palette: palette,
+                mipmap1Data: textureData[1],
+                mipmap2Data: textureData[2],
+                mipmap3Data: textureData[3]);
+
+
+            byte[] CreateDecalTextureData(Image<Rgba32> image)
+            {
+                var mode = textureSettings.DecalTransparency ?? DecalTransparency.Alpha;
+                var getPaletteIndex = (mode == DecalTransparency.Alpha) ? (Func<Rgba32, byte>)(color => Math.Min(color.A, (byte)254)) :
+                                                                          (Func<Rgba32, byte>)(color => (byte)Math.Min((color.R + color.G + color.B) / 3, 254));
+
+                var data = new byte[image.Width * image.Height];
+                for (int y = 0; y < image.Height; y++)
+                {
+                    var rowSpan = image.GetPixelRowSpan(y);
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        var color = rowSpan[x];
+                        data[y * image.Width + x] = getPaletteIndex(color);
+                    }
+                }
+                return data;
             }
         }
 
