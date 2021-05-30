@@ -553,8 +553,8 @@ namespace WadMaker
             byte[] CreateDecalTextureData(Image<Rgba32> image)
             {
                 var mode = textureSettings.DecalTransparency ?? DecalTransparency.Alpha;
-                var getPaletteIndex = (mode == DecalTransparency.Alpha) ? (Func<Rgba32, byte>)(color => Math.Min(color.A, (byte)254)) :
-                                                                          (Func<Rgba32, byte>)(color => (byte)Math.Min((color.R + color.G + color.B) / 3, 254));
+                var getPaletteIndex = (mode == DecalTransparency.Alpha) ? (Func<Rgba32, byte>)(color => color.A) :
+                                                                          (Func<Rgba32, byte>)(color => (byte)((color.R + color.G + color.B) / 3));
 
                 var data = new byte[image.Width * image.Height];
                 for (int y = 0; y < image.Height; y++)
