@@ -10,7 +10,7 @@
     - [Advanced options](#advanced-options)
     - [Texture-specific settings](#texture-specific-settings)
         - [Available settings](#available-settings)
-        - [wadmaker.config format](#wadmaker.config-format)
+        - [wadmaker.config format](#wadmakerconfig-format)
 - [About Half-Life textures](#about-half-life-textures)
 - [Comparisons](#comparisons)
 - [Custom converters](#custom-converters)
