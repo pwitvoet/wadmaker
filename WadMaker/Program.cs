@@ -216,33 +216,33 @@ namespace WadMaker
                 .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).Item1.Converter != null)
                 .Where(path => !path.Contains(".mipmap"))
                 .Where(path => !WadMakingSettings.IsConfigurationFile(path))
-                .GroupBy(path => Path.GetFileNameWithoutExtension(path).ToLowerInvariant());
+                .GroupBy(path => GetTextureName(path));
 
             // Check for new and updated images:
             try
             {
-                foreach (var imagePaths in textureImagePaths)
+                foreach (var imagePathsGroup in textureImagePaths)
                 {
-                    var textureName = imagePaths.Key;
+                    var textureName = imagePathsGroup.Key;
                     if (!IsValidTextureName(textureName))
                     {
-                        Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePaths)}). Skipping file(s).");
+                        Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
                         continue;
                     }
                     else if (textureName.Length > 15)
                     {
-                        Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePaths)}). Skipping file(s).");
+                        Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
                         continue;
                     }
-                    else if (imagePaths.Count() > 1)
+                    else if (imagePathsGroup.Count() > 1)
                     {
-                        Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePaths)}). Skipping files.");
+                        Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePathsGroup)}). Skipping files.");
                         continue;
                     }
                     // NOTE: Texture dimensions (which must be multiples of 16) are checked later, in CreateTextureFromImage.
 
 
-                    var filePath = imagePaths.Single();
+                    var filePath = imagePathsGroup.Single();
                     var isExistingImage = wadTextureNames.Contains(textureName.ToLowerInvariant());
                     var isSupportedFileType = ImageReading.IsSupported(filePath);
 
@@ -284,7 +284,7 @@ namespace WadMaker
                         }
 
                         // Create texture from image:
-                        var texture = CreateTextureFromImage(imageFilePath, textureSettings, isDecalsWad);
+                        var texture = CreateTextureFromImage(imageFilePath, textureName, textureSettings, isDecalsWad);
 
                         if (isExistingImage)
                         {
@@ -406,13 +406,15 @@ namespace WadMaker
         // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, parenthesis, etc.?)
         static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256 && c != ' ');
 
+        static string GetTextureName(string path)=> Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+
         static IEnumerable<string> GetMipmapFilePaths(string path)
         {
             for (int mipmap = 1; mipmap <= 3; mipmap++)
                 yield return Path.ChangeExtension(path, $".mipmap{mipmap}{Path.GetExtension(path)}");
         }
 
-        static Texture CreateTextureFromImage(string path, TextureSettings textureSettings, bool isDecalsWad)
+        static Texture CreateTextureFromImage(string path, string textureName, TextureSettings textureSettings, bool isDecalsWad)
         {
             // Load the main texture image, and any available mipmap images:
             using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
@@ -427,7 +429,7 @@ namespace WadMaker
                         throw new InvalidDataException($"Mipmap {i} for texture '{path}' width or height does not match texture size.");
 
                 if (isDecalsWad)
-                    return CreateDecalTexture(Path.GetFileNameWithoutExtension(path), images.ToArray(), textureSettings);
+                    return CreateDecalTexture(textureName, images.ToArray(), textureSettings);
 
 
                 var filename = Path.GetFileName(path);
@@ -508,7 +510,7 @@ namespace WadMaker
                     .ToArray();
 
                 return Texture.CreateMipmapTexture(
-                    name: Path.GetFileNameWithoutExtension(path),
+                    name: textureName,
                     width: images[0].Width,
                     height: images[0].Height,
                     imageData: textureData[0],
