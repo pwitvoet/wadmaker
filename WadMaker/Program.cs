@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using WadMaker.FileFormats;
 
@@ -31,18 +32,21 @@ namespace WadMaker
         public string InputFilePath { get; set; }           // Wad or bsp path (output in build mode, input in extract mode).
         public string OutputDirectory { get; set; }         // Extract mode only
         public string OutputFilePath { get; set; }          // Output bsp path (when removing embedded textures)
+
+        public bool DisableFileLogging { get; set; }        // -nologfile   disables logging to a file (parent-directory\wadmaker.log)
     }
 
     class Program
     {
         static Regex AnimatedTextureNameRegex = new Regex(@"^\+[0-9A-J]");
+        static TextWriter LogFile;
 
 
         static void Main(string[] args)
         {
             try
             {
-                Console.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                Log($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
 
                 var settings = ParseArguments(args);
                 if (settings.Extract)
@@ -55,13 +59,23 @@ namespace WadMaker
                 }
                 else
                 {
+                    if (!settings.DisableFileLogging)
+                    {
+                        var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), $"wadmaker - {Path.GetFileName(settings.InputDirectory)}.log");
+                        LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
+                        LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                    }
                     MakeWad(settings.InputDirectory, settings.InputFilePath, settings.FullRebuild, settings.IncludeSubDirectories);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: {ex.GetType().Name}: '{ex.Message}'.");
-                Console.WriteLine(ex.StackTrace);
+                Log($"Error: {ex.GetType().Name}: '{ex.Message}'.");
+                Log(ex.StackTrace);
+            }
+            finally
+            {
+                LogFile?.Dispose();
             }
         }
 
@@ -82,6 +96,7 @@ namespace WadMaker
                     case "-mipmaps": settings.ExtractMipmaps = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
                     case "-remove": settings.RemoveEmbeddedTextures = true; break;
+                    case "-nologfile": settings.DisableFileLogging = true; break;
                     default: throw new ArgumentException($"Unknown argument: '{arg}'.");
                 }
             }
@@ -159,7 +174,7 @@ namespace WadMaker
                         var filePath = Path.Combine(outputDirectory, texture.Name + $"{(mipmap > 0 ? ".mipmap" + mipmap : "")}.png");
                         if (!overwriteExistingFiles && File.Exists(filePath))
                         {
-                            Console.WriteLine($"WARNING: {filePath} already exist. Skipping texture.");
+                            Log($"WARNING: {filePath} already exist. Skipping texture.");
                             continue;
                         }
 
@@ -171,12 +186,12 @@ namespace WadMaker
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
+                        Log($"ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
                     }
                 }
             }
 
-            Console.WriteLine($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputFilePath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputFilePath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         static void RemoveEmbeddedTextures(string bspFilePath, string outputFilePath)
@@ -186,11 +201,11 @@ namespace WadMaker
             if (!bspFilePath.EndsWith(".bsp"))
                 throw new ArgumentException("Removing embedded textures requires a .bsp file.");
 
-            Console.WriteLine($"Removing embedded textures from '{bspFilePath}' and saving the result to '{outputFilePath}'.");
+            Log($"Removing embedded textures from '{bspFilePath}' and saving the result to '{outputFilePath}'.");
 
             var removedTextureCount = Bsp.RemoveEmbeddedTextures(bspFilePath, outputFilePath);
 
-            Console.WriteLine($"Removed {removedTextureCount} embedded textures from {bspFilePath} in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Log($"Removed {removedTextureCount} embedded textures from {bspFilePath} in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         static void MakeWad(string inputDirectory, string outputWadFilePath, bool fullRebuild, bool includeSubDirectories)
@@ -226,17 +241,17 @@ namespace WadMaker
                     var textureName = imagePathsGroup.Key;
                     if (!IsValidTextureName(textureName))
                     {
-                        Console.WriteLine($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
+                        Log($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
                         continue;
                     }
                     else if (textureName.Length > 15)
                     {
-                        Console.WriteLine($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
+                        Log($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
                         continue;
                     }
                     else if (imagePathsGroup.Count() > 1)
                     {
-                        Console.WriteLine($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePathsGroup)}). Skipping files.");
+                        Log($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePathsGroup)}). Skipping files.");
                         continue;
                     }
                     // NOTE: Texture dimensions (which must be multiples of 16) are checked later, in CreateTextureFromImage.
@@ -260,7 +275,7 @@ namespace WadMaker
                             .Any(dateTime => dateTime > lastWadUpdateTime);
                         if (!isImageUpdated && lastSettingsChangeTime < lastWadUpdateTime)
                         {
-                            //Console.WriteLine($"No modifications detected for '{textureName}' ({filePath}). Skipping file.");
+                            //Log($"No modifications detected for '{textureName}' ({filePath}). Skipping file.");
                             continue;
                         }
                     }
@@ -299,7 +314,7 @@ namespace WadMaker
                             }
                             texturesUpdated += 1;
                             if (updateExistingWad)
-                                Console.WriteLine($"Updated texture '{textureName}' (from {filePath}).");
+                                Log($"Updated texture '{textureName}' (from {filePath}).");
                         }
                         else
                         {
@@ -307,12 +322,12 @@ namespace WadMaker
                             wad.Textures.Add(texture);
                             wadTextureNames.Add(textureName);
                             texturesAdded += 1;
-                            Console.WriteLine($"Added texture '{textureName}' (from {filePath}).");
+                            Log($"Added texture '{textureName}' (from {filePath}).");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                        Log($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
                     }
                 }
 
@@ -329,7 +344,7 @@ namespace WadMaker
                             // Delete texture:
                             wad.Textures.Remove(wad.Textures.First(texture => texture.Name.ToLowerInvariant() == textureName));
                             texturesRemoved += 1;
-                            Console.WriteLine($"Removed texture '{textureName}'.");
+                            Log($"Removed texture '{textureName}'.");
                         }
                     }
                 }
@@ -346,14 +361,14 @@ namespace WadMaker
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"WARNING: Failed to delete temporary conversion output directory: {ex.GetType().Name}: '{ex.Message}'.");
+                    Log($"WARNING: Failed to delete temporary conversion output directory: {ex.GetType().Name}: '{ex.Message}'.");
                 }
             }
 
             if (updateExistingWad)
-                Console.WriteLine($"Updated {outputWadFilePath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Log($"Updated {outputWadFilePath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
             else
-                Console.WriteLine($"Created {outputWadFilePath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Log($"Created {outputWadFilePath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
 
@@ -575,7 +590,7 @@ namespace WadMaker
         static void ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath)
         {
             var arguments = converterArguments.Replace("{input}", inputPath).Replace("{output}", outputPath).Trim();
-            Console.WriteLine($"Executing conversion command: '{converter} {arguments}'.");
+            Log($"Executing conversion command: '{converter} {arguments}'.");
 
             var startInfo = new ProcessStartInfo(converter, arguments) {
                 CreateNoWindow = true,
@@ -586,13 +601,13 @@ namespace WadMaker
 
             using (var process = new Process { StartInfo = startInfo })
             {
-                process.OutputDataReceived += (sender, e) => Console.WriteLine($"    INFO: {e.Data}");
-                process.ErrorDataReceived += (sender, e) => Console.WriteLine($"    ERROR: {e.Data}");
+                process.OutputDataReceived += (sender, e) => Log($"    INFO: {e.Data}");
+                process.ErrorDataReceived += (sender, e) => Log($"    ERROR: {e.Data}");
                 process.Start();
                 if (!process.WaitForExit(10_000))
                     throw new TimeoutException("Conversion command did not finish within 10 seconds, .");
 
-                Console.WriteLine($"Conversion command finished with exit code: {process.ExitCode}.");
+                Log($"Conversion command finished with exit code: {process.ExitCode}.");
             }
         }
 
@@ -658,5 +673,12 @@ namespace WadMaker
         }
 
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
+
+
+        static void Log(string message)
+        {
+            Console.WriteLine(message);
+            LogFile?.WriteLine(message);
+        }
     }
 }
