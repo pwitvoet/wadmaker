@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace WadMaker
+namespace Shared
 {
     /// <summary>
     /// A list of disposable items. Disposing this list will dispose and remove its contents.
     /// </summary>
-    class DisposableList<T> : List<T>, IDisposable
+    public class DisposableList<T> : List<T>, IDisposable
         where T : IDisposable
     {
         public DisposableList()

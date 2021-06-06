@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace WadMaker.FileFormats
+namespace Shared.FileFormats
 {
     // TODO: I've only been able to test RGB and Grayscale so far, not Bitmap and Indexed!
     // TODO: I also haven't found any files that us the zip/zip-with-prediction compression methods.
@@ -14,7 +14,7 @@ namespace WadMaker.FileFormats
     /// An image reader for Photoshop (.psd, .psb) files.
     /// Works by reading the embedded composite image, which is only available in files that have been saved with 'maximize compatibility' enabled.
     /// </summary>
-    class PsdReader : IImageReader
+    public class PsdReader : IImageReader
     {
         public string[] SupportedExtensions => new[] { "psd", "psb" };
 

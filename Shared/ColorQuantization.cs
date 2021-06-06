@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace WadMaker
+namespace Shared
 {
-    static class ColorQuantization
+    public static class ColorQuantization
     {
         /// <summary>
         /// Divides the colors in the given histogram into clusters, using a modified median-cut algorithm.

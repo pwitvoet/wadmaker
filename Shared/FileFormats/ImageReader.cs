@@ -2,12 +2,12 @@
 using SixLabors.ImageSharp.PixelFormats;
 using System.Linq;
 
-namespace WadMaker.FileFormats
+namespace Shared.FileFormats
 {
     /// <summary>
     /// An image reader for common image formats (.png, .jpg, .gif, .bmp and .tga).
     /// </summary>
-    class ImageReader : IImageReader
+    public class ImageReader : IImageReader
     {
         public string[] SupportedExtensions => Configuration.Default.ImageFormats
             .SelectMany(format => format.FileExtensions)

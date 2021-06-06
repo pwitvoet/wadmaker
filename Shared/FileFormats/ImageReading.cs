@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace WadMaker.FileFormats
+namespace Shared.FileFormats
 {
-    static class ImageReading
+    public static class ImageReading
     {
         private static IImageReader[] _imageReaders;
         private static IDictionary<string, IImageReader> _extensionReaderMapping;

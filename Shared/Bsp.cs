@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace WadMaker
+namespace Shared
 {
     public static class Bsp
     {

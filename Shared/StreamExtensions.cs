@@ -3,9 +3,9 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace WadMaker
+namespace Shared
 {
-    static class StreamExtensions
+    public static class StreamExtensions
     {
         #region Reading
 

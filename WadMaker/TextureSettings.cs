@@ -1,4 +1,5 @@
-﻿using SixLabors.ImageSharp.PixelFormats;
+﻿using Shared;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace WadMaker
 {

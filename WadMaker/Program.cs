@@ -9,7 +9,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using WadMaker.FileFormats;
+using Shared.FileFormats;
+using Shared;
 
 namespace WadMaker
 {

@@ -1,12 +1,12 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace WadMaker.FileFormats
+namespace Shared.FileFormats
 {
     /// <summary>
     /// An image reader can read or extract images from files.
     /// </summary>
-    interface IImageReader
+    public interface IImageReader
     {
         /// <summary>
         /// The list of file extensions that this image reader supports (excluding leading dots).

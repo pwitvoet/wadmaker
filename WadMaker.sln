@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WadMaker", "WadMaker\WadMaker.csproj", "{C46EAED1-06A5-4A27-B55D-8411A86F168C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WadMaker", "WadMaker\WadMaker.csproj", "{D7145292-1958-4015-B41C-A150D04DB3DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Shared\Shared.csproj", "{A6489FDE-01A0-4796-ACEA-0D78598D06B2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{C46EAED1-06A5-4A27-B55D-8411A86F168C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C46EAED1-06A5-4A27-B55D-8411A86F168C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C46EAED1-06A5-4A27-B55D-8411A86F168C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C46EAED1-06A5-4A27-B55D-8411A86F168C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7145292-1958-4015-B41C-A150D04DB3DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7145292-1958-4015-B41C-A150D04DB3DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7145292-1958-4015-B41C-A150D04DB3DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7145292-1958-4015-B41C-A150D04DB3DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

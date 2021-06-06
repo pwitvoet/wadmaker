@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace WadMaker
+namespace Shared
 {
     public enum TextureType : byte
     {

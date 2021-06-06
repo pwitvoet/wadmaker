@@ -4,13 +4,13 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 
-namespace WadMaker.FileFormats
+namespace Shared.FileFormats
 {
     /// <summary>
     /// An image reader for Krita (.kra) and OpenRaster (.ora) files.
     /// Works by reading the embedded 'mergedimage.png' file.
     /// </summary>
-    class KraReader : IImageReader
+    public class KraReader : IImageReader
     {
         public string[] SupportedExtensions => new[] { "kra", "ora" };
 

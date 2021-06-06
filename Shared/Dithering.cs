@@ -2,9 +2,9 @@
 using SixLabors.ImageSharp.PixelFormats;
 using System;
 
-namespace WadMaker
+namespace Shared
 {
-    enum DitheringAlgorithm
+    public enum DitheringAlgorithm
     {
         None,
 
@@ -12,7 +12,7 @@ namespace WadMaker
     }
 
 
-    static class Dithering
+    public static class Dithering
     {
         /// <summary>
         /// Uses Floyd-Steinberg dithering to create an 8-bit indexed canvas from the input canvas and the given palette.
