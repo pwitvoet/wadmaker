@@ -60,9 +60,9 @@ namespace Shared
         {
             var wad = new Wad();
 
-            var wad3MagicString = stream.ReadString(4);
-            if (wad3MagicString != "WAD3")
-                throw new InvalidDataException($"Expected file to start with 'WAD3' but found '{wad3MagicString}'.");
+            var fileSignature = stream.ReadString(4);
+            if (fileSignature != "WAD3")
+                throw new InvalidDataException($"Expected file to start with 'WAD3' but found '{fileSignature}'.");
 
             var textureCount = stream.ReadUint();
 

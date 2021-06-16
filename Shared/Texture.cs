@@ -28,7 +28,7 @@ namespace Shared
     {
         public static Texture CreateMipmapTexture(string name, int width, int height, byte[] imageData = null, IEnumerable<Rgba32> palette = null, byte[] mipmap1Data = null, byte[] mipmap2Data = null, byte[] mipmap3Data = null)
         {
-            if (width < 0 || height < 0) throw new ArgumentException("Width and height must be positive.");
+            if (width < 1 || height < 1) throw new ArgumentException("Width and height must be greater than zero.");
             if (width % 16 != 0 || height % 16 != 0) throw new ArgumentException("Width and height must be multiples of 16.");
             if (imageData?.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
             if (mipmap1Data?.Length != width * height / 4) throw new ArgumentException("Mipmap 1 data must be 'width/2 x height/2' bytes.", nameof(mipmap1Data));
