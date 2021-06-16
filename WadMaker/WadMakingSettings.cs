@@ -258,7 +258,7 @@ namespace WadMaker
 
                     case DitherScaleKey:
                         RequireToken(":");
-                        textureSettings.DitherScale = ParseToken(long.Parse, "dither scale");
+                        textureSettings.DitherScale = ParseToken(float.Parse, "dither scale");
                         break;
 
                     case TransparencyThresholdKey:
