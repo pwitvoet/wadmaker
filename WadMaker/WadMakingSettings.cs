@@ -13,7 +13,7 @@ namespace WadMaker
     /// A collection of texture settings rules, coming from a 'wadmaker.config' file.
     /// 
     /// Rules are put on separate lines, starting with a filename (which can include wildcards: *) and followed by one or more texture settings.
-    /// Empty lines and lines starting with // are ignored. Only one rule is applied per texture, with priority given to more specific rules.
+    /// Empty lines and lines starting with // are ignored. When multiple rules match a filename, settings defined in more specific rules will take priority.
     /// </para>
     /// </summary>
     class WadMakingSettings
@@ -56,7 +56,7 @@ namespace WadMaker
         /// Returns texture settings for the given filename, and the time when those settings were last modified.
         /// More specific name patterns (no wildcards) take priority over less specific ones (wildcards).
         /// </summary>
-        public (TextureSettings, DateTimeOffset) GetTextureSettings(string filename)
+        public (TextureSettings settings, DateTimeOffset lastUpdate) GetTextureSettings(string filename)
         {
             var textureSettings = new TextureSettings();
             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(0);
@@ -65,15 +65,15 @@ namespace WadMaker
                 if (rule.TextureSettings is TextureSettings ruleSettings)
                 {
                     // More specific rules override settings defined by less specific rules:
-                    if (ruleSettings.DitheringAlgorithm != null)    textureSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
-                    if (ruleSettings.DitherScale != null)           textureSettings.DitherScale = ruleSettings.DitherScale;
-                    if (ruleSettings.TransparencyThreshold != null) textureSettings.TransparencyThreshold = ruleSettings.TransparencyThreshold;
-                    if (ruleSettings.TransparencyColor != null)     textureSettings.TransparencyColor = ruleSettings.TransparencyColor;
-                    if (ruleSettings.WaterFogColor != null)         textureSettings.WaterFogColor = ruleSettings.WaterFogColor;
-                    if (ruleSettings.DecalTransparency != null)     textureSettings.DecalTransparency = ruleSettings.DecalTransparency;
-                    if (ruleSettings.DecalColor != null)            textureSettings.DecalColor = ruleSettings.DecalColor;
-                    if (ruleSettings.Converter != null)             textureSettings.Converter = ruleSettings.Converter;
-                    if (ruleSettings.ConverterArguments != null)    textureSettings.ConverterArguments = ruleSettings.ConverterArguments;
+                    if (ruleSettings.DitheringAlgorithm != null)        textureSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
+                    if (ruleSettings.DitherScale != null)               textureSettings.DitherScale = ruleSettings.DitherScale;
+                    if (ruleSettings.TransparencyThreshold != null)     textureSettings.TransparencyThreshold = ruleSettings.TransparencyThreshold;
+                    if (ruleSettings.TransparencyColor != null)         textureSettings.TransparencyColor = ruleSettings.TransparencyColor;
+                    if (ruleSettings.WaterFogColor != null)             textureSettings.WaterFogColor = ruleSettings.WaterFogColor;
+                    if (ruleSettings.DecalTransparencySource != null)   textureSettings.DecalTransparencySource = ruleSettings.DecalTransparencySource;
+                    if (ruleSettings.DecalColor != null)                textureSettings.DecalColor = ruleSettings.DecalColor;
+                    if (ruleSettings.Converter != null)                 textureSettings.Converter = ruleSettings.Converter;
+                    if (ruleSettings.ConverterArguments != null)        textureSettings.ConverterArguments = ruleSettings.ConverterArguments;
                 }
 
                 if (rule.LastModified > timestamp)
@@ -278,7 +278,7 @@ namespace WadMaker
 
                     case DecalTransparencyKey:
                         RequireToken(":");
-                        textureSettings.DecalTransparency = ParseToken(ParseDecalTransparency, "decal transparency");
+                        textureSettings.DecalTransparencySource = ParseToken(ParseDecalTransparency, "decal transparency");
                         break;
 
                     case DecalColorKey:
@@ -384,12 +384,12 @@ namespace WadMaker
             }
         }
 
-        private static DecalTransparency ParseDecalTransparency(string str)
+        private static DecalTransparencySource ParseDecalTransparency(string str)
         {
             switch (str.ToLowerInvariant())
             {
-                case "alpha": return DecalTransparency.Alpha;
-                case "grayscale": return DecalTransparency.Grayscale;
+                case "alpha": return DecalTransparencySource.AlphaChannel;
+                case "grayscale": return DecalTransparencySource.Grayscale;
                 default: throw new InvalidDataException($"Invalid decal transparency: '{str}'.");
             }
         }
@@ -413,7 +413,7 @@ namespace WadMaker
                         if (settings.TransparencyThreshold != null) writer.Write($" {TransparencyThresholdKey}: {settings.TransparencyThreshold}");
                         if (settings.TransparencyColor != null) writer.Write($" {TransparencyColorKey}: {Serialize(settings.TransparencyColor.Value, false)}");
                         if (settings.WaterFogColor != null) writer.Write($" {WaterFogColorKey}: {Serialize(settings.WaterFogColor.Value)}");
-                        if (settings.DecalTransparency != null) writer.Write($" {DecalTransparencyKey}: {Serialize(settings.DecalTransparency.Value)}");
+                        if (settings.DecalTransparencySource != null) writer.Write($" {DecalTransparencyKey}: {Serialize(settings.DecalTransparencySource.Value)}");
                         if (settings.DecalColor != null) writer.Write($" {DecalColorKey}: {Serialize(settings.DecalColor.Value, false)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
@@ -437,13 +437,13 @@ namespace WadMaker
             }
         }
 
-        private static string Serialize(DecalTransparency decalTransparency)
+        private static string Serialize(DecalTransparencySource decalTransparency)
         {
             switch (decalTransparency)
             {
                 default:
-                case DecalTransparency.Alpha: return "alpha";
-                case DecalTransparency.Grayscale: return "grayscale";
+                case DecalTransparencySource.AlphaChannel: return "alpha";
+                case DecalTransparencySource.Grayscale: return "grayscale";
             }
         }
 

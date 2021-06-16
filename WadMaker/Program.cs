@@ -229,7 +229,7 @@ namespace WadMaker
             // We'll group files by texture name, to make these collisions easy to detect:
             var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*", includeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToHashSet();
             var textureImagePaths = allInputDirectoryFiles
-                .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).Item1.Converter != null)
+                .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !path.Contains(".mipmap"))
                 .Where(path => !WadMakingSettings.IsConfigurationFile(path))
                 .GroupBy(path => GetTextureName(path));
@@ -570,8 +570,8 @@ namespace WadMaker
 
             byte[] CreateDecalTextureData(Image<Rgba32> image)
             {
-                var mode = textureSettings.DecalTransparency ?? DecalTransparency.Alpha;
-                var getPaletteIndex = (mode == DecalTransparency.Alpha) ? (Func<Rgba32, byte>)(color => color.A) :
+                var mode = textureSettings.DecalTransparencySource ?? DecalTransparencySource.AlphaChannel;
+                var getPaletteIndex = (mode == DecalTransparencySource.AlphaChannel) ? (Func<Rgba32, byte>)(color => color.A) :
                                                                           (Func<Rgba32, byte>)(color => (byte)((color.R + color.G + color.B) / 3));
 
                 var data = new byte[image.Width * image.Height];

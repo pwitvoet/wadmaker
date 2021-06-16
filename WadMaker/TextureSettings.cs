@@ -3,9 +3,9 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace WadMaker
 {
-    enum DecalTransparency
+    enum DecalTransparencySource
     {
-        Alpha,
+        AlphaChannel,
         Grayscale,
     }
 
@@ -54,9 +54,9 @@ namespace WadMaker
 
         /// <summary>
         /// The channel that determines the decal transparency.
-        /// Defaults to <see cref="DecalTransparency.Alpha"/>.
+        /// Defaults to <see cref="DecalTransparencySource.AlphaChannel"/>.
         /// </summary>
-        public DecalTransparency? DecalTransparency { get; set; }
+        public DecalTransparencySource? DecalTransparencySource { get; set; }
 
         /// <summary>
         /// Decal color (RGB).
