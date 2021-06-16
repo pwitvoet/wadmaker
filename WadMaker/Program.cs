@@ -17,13 +17,13 @@ namespace WadMaker
     class ProgramSettings
     {
         // Build settings:
-        public bool FullRebuild { get; set; }               // -full:       forces a full rebuild instead of an incremental one
-        public bool IncludeSubDirectories { get; set; }     // -subdirs:    also include images in sub-directories
+        public bool FullRebuild { get; set; }               // -full        forces a full rebuild instead of an incremental one
+        public bool IncludeSubDirectories { get; set; }     // -subdirs     also include images in sub-directories
 
         // Extract settings:
         public bool Extract { get; set; }                   //              Texture extraction mode is enabled when the first argument (path) is a wad or bsp file.
-        public bool ExtractMipmaps { get; set; }            // -mipmaps:    also extract mipmaps
-        public bool OverwriteExistingFiles { get; set; }    // -overwrite:  extract mode only, enables overwriting of existing image files (off by default)
+        public bool ExtractMipmaps { get; set; }            // -mipmaps     also extract mipmaps
+        public bool OverwriteExistingFiles { get; set; }    // -overwrite   extract mode only, enables overwriting of existing image files (off by default)
 
         // Bsp settings:
         public bool RemoveEmbeddedTextures { get; set; }    // -remove      removes embedded textures from the given bsp file
@@ -351,6 +351,7 @@ namespace WadMaker
                 }
 
                 // Finally, save the wad file:
+                Directory.CreateDirectory(Path.GetDirectoryName(outputWadFilePath));
                 wad.Save(outputWadFilePath);
             }
             finally
