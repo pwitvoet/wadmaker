@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WadMaker", "WadMaker\WadMak
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Shared\Shared.csproj", "{A6489FDE-01A0-4796-ACEA-0D78598D06B2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpriteMaker", "SpriteMaker\SpriteMaker.csproj", "{0403FCD1-888D-4790-9DCB-59A625468841}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6489FDE-01A0-4796-ACEA-0D78598D06B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0403FCD1-888D-4790-9DCB-59A625468841}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0403FCD1-888D-4790-9DCB-59A625468841}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0403FCD1-888D-4790-9DCB-59A625468841}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0403FCD1-888D-4790-9DCB-59A625468841}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
