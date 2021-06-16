@@ -12,7 +12,7 @@ namespace Shared
         /// Divides the colors in the given histogram into clusters, using a modified median-cut algorithm.
         /// Returns an array of (average-color, nearby-colors) tuples.
         /// </summary>
-        public static (Rgba32, Rgba32[])[] GetColorClusters(
+        public static (Rgba32 averageColor, Rgba32[] colors)[] GetColorClusters(
             IDictionary<Rgba32, int> colorHistogram,
             int maxColors = 256)
         {
@@ -64,31 +64,39 @@ namespace Shared
 
         /// <summary>
         /// Returns the counts of all colors that are used in the given images.
+        /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>
         public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<Image<Rgba32>> images, Func<Rgba32, bool> ignoreColor)
         {
             var colorHistogram = new Dictionary<Rgba32, int>();
-
             foreach (var image in images)
-            {
-                for (int y = 0; y < image.Height; y++)
-                {
-                    var rowSpan = image.GetPixelRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
-                    {
-                        var color = rowSpan[x];
-                        if (ignoreColor(color))
-                            continue;
-
-                        if (!colorHistogram.TryGetValue(color, out var count))
-                            count = 0;
-
-                        colorHistogram[color] = count + 1;
-                    }
-                }
-            }
+                UpdateColorHistogram(colorHistogram, image, ignoreColor);
 
             return colorHistogram;
+        }
+
+        /// <summary>
+        /// Adds the counts of all colors that are used in the given image to the given color histogram.
+        /// Only the R, G and B channels are taken into account, alpha is ignored.
+        /// </summary>
+        public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, Image<Rgba32> image, Func<Rgba32, bool> ignoreColor)
+        {
+            for (int y = 0; y < image.Height; y++)
+            {
+                var rowSpan = image.GetPixelRowSpan(y);
+                for (int x = 0; x < image.Width; x++)
+                {
+                    var color = rowSpan[x];
+                    if (ignoreColor(color))
+                        continue;
+
+                    color.A = 255;  // Ignore alpha
+                    if (!colorHistogram.TryGetValue(color, out var count))
+                        count = 0;
+
+                    colorHistogram[color] = count + 1;
+                }
+            }
         }
 
         /// <summary>
@@ -131,6 +139,28 @@ namespace Shared
             return index;
         }
 
+        /// <summary>
+        /// Returns the (weighted) average color of the given color histogram.
+        /// </summary>
+        public static Rgba32 GetAverageColor(IDictionary<Rgba32, int> colorHistogram)
+        {
+            var r = 0L;
+            var g = 0L;
+            var b = 0L;
+            var totalWeight = 0L;
+            foreach (var kv in colorHistogram)
+            {
+                r += kv.Key.R * kv.Value;
+                g += kv.Key.G * kv.Value;
+                b += kv.Key.B * kv.Value;
+                totalWeight += kv.Value;
+            }
+            if (totalWeight <= 0)
+                return new Rgba32();
+
+            return new Rgba32((byte)Clamp((int)(r / totalWeight), 0, 255), (byte)Clamp((int)(g / totalWeight), 0, 255), (byte)Clamp((int)(b / totalWeight), 0, 255));
+        }
+
 
         private static float SquaredDistance(Rgba32 color1, Rgba32 color2)
         {
@@ -139,6 +169,8 @@ namespace Shared
             var db = color1.B - color2.B;
             return (dr * dr) + (dg * dg) + (db * db);
         }
+
+        private static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
 
 
         private class ColorBoundingBox

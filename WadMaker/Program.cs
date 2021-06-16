@@ -483,7 +483,7 @@ namespace WadMaker
                 // Make palette adjustments for special textures:
                 if (isWaterTexture)
                 {
-                    var fogColor = textureSettings.WaterFogColor ?? GetAverageColor(colorHistogram);
+                    var fogColor = textureSettings.WaterFogColor ?? ColorQuantization.GetAverageColor(colorHistogram);
                     var fogIntensity = new Rgba32((byte)Clamp(textureSettings.WaterFogColor?.A ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
 
                     colorClusters = colorClusters.Take(3)
@@ -547,7 +547,7 @@ namespace WadMaker
             }
 
             // The last palette color determines the color of the decal. All other colors are irrelevant - palette indexes are treated as alpha values instead.
-            var decalColor = textureSettings.DecalColor ?? GetAverageColor(ColorQuantization.GetColorHistogram(images, color => color.A == 0));
+            var decalColor = textureSettings.DecalColor ?? ColorQuantization.GetAverageColor(ColorQuantization.GetColorHistogram(images, color => color.A == 0));
             var palette = Enumerable.Range(0, 255)
                 .Select(i => new Rgba32((byte)i, (byte)i, (byte)i))
                 .Append(decalColor)
@@ -612,25 +612,6 @@ namespace WadMaker
             }
         }
 
-
-        static Rgba32 GetAverageColor(IDictionary<Rgba32, int> colorHistogram)
-        {
-            var r = 0L;
-            var g = 0L;
-            var b = 0L;
-            var totalWeight = 0L;
-            foreach (var kv in colorHistogram)
-            {
-                r += kv.Key.R * kv.Value;
-                g += kv.Key.G * kv.Value;
-                b += kv.Key.B * kv.Value;
-                totalWeight += kv.Value;
-            }
-            if (totalWeight <= 0)
-                return new Rgba32();
-
-            return new Rgba32((byte)Clamp((int)(r / totalWeight), 0, 255), (byte)Clamp((int)(g / totalWeight), 0, 255), (byte)Clamp((int)(b / totalWeight), 0, 255));
-        }
 
         static int GetBrightness(Rgba32 color) => (int)(color.R * 0.21 + color.G * 0.72 + color.B * 0.07);
 
