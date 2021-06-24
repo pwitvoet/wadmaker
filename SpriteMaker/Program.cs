@@ -13,6 +13,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Web;
 
 namespace SpriteMaker
 {
@@ -23,6 +24,7 @@ namespace SpriteMaker
 
         // Build settings:
         public bool FullRebuild { get; set; }                   // -full            forces a full rebuild instead of an incremental one
+        public bool EnableSubDirectoryRemoval { get; set; }     // -subdirremoval   enables deleting of output sub-directories when input sub-directories are removed
 
         // Extract settings:
         public bool Extract { get; set; }                       // -extract         extracts all sprites in the input directory (this is also enabled if the input file is a .spr file)
@@ -78,7 +80,7 @@ namespace SpriteMaker
                     if (!string.IsNullOrEmpty(Path.GetExtension(settings.InputPath)))
                         MakeSprite(settings.InputPath, settings.OutputPath);
                     else
-                        MakeSprites(settings.InputPath, settings.OutputPath, settings.FullRebuild, settings.IncludeSubDirectories);
+                        MakeSprites(settings.InputPath, settings.OutputPath, settings.FullRebuild, settings.IncludeSubDirectories, settings.EnableSubDirectoryRemoval);
                 }
             }
             catch (Exception ex)
@@ -105,6 +107,7 @@ namespace SpriteMaker
                 {
                     case "-subdirs": settings.IncludeSubDirectories = true; break;
                     case "-full": settings.FullRebuild = true; break;
+                    case "-subdirremoval": settings.EnableSubDirectoryRemoval = true; break;
                     case "-extract": settings.Extract = true; break;
                     case "-spritesheet": settings.ExtractAsSpriteSheet = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
@@ -179,10 +182,29 @@ namespace SpriteMaker
         }
 
 
-        static void MakeSprites(string inputDirectory, string outputDirectory, bool fullRebuild, bool includeSubDirectories)
+        static void MakeSprites(string inputDirectory, string outputDirectory, bool fullRebuild, bool includeSubDirectories, bool enableSubDirectoryRemoving)
         {
             var stopwatch = Stopwatch.StartNew();
 
+            (var spritesAdded, var spritesUpdated, var spritesRemoved) = MakeSpritesFromImagesDirectory(inputDirectory, outputDirectory, fullRebuild, includeSubDirectories, enableSubDirectoryRemoving);
+
+            Log($"Updated {outputDirectory} from {inputDirectory}: added {spritesAdded}, updated {spritesUpdated} and removed {spritesRemoved} sprites, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+        }
+
+        static void MakeSprite(string inputPath, string outputPath)
+        {
+            throw new NotImplementedException();
+        }
+
+
+        // Sprite making:
+        static (int spritesAdded, int spritesUpdated, int spritesRemoved) MakeSpritesFromImagesDirectory(
+            string inputDirectory,
+            string outputDirectory,
+            bool fullRebuild,
+            bool includeSubDirectories,
+            bool enableSubDirectoryRemoving)
+        {
             var spritesAdded = 0;
             var spritesUpdated = 0;
             var spritesRemoved = 0;
@@ -378,16 +400,81 @@ namespace SpriteMaker
                 }
             }
 
-            Log($"Updated {outputDirectory} from {inputDirectory}: added {spritesAdded}, updated {spritesUpdated} and removed {spritesRemoved} sprites, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            // Handle sub-directories (recursively):
+            if (includeSubDirectories)
+            {
+                var previousSubDirectoryNames = LoadSubDirectoriesHistory(inputDirectory);
+                var currentSubDirectoryNames = new HashSet<string>();
+
+                foreach (var subDirectoryPath in Directory.EnumerateDirectories(inputDirectory))
+                {
+                    var subDirectoryName = Path.GetFileName(subDirectoryPath);
+                    (var added, var updated, var removed) = MakeSpritesFromImagesDirectory(
+                        subDirectoryPath,
+                        Path.Combine(outputDirectory, subDirectoryName),
+                        fullRebuild,
+                        includeSubDirectories,
+                        enableSubDirectoryRemoving);
+
+                    currentSubDirectoryNames.Add(subDirectoryName);
+                    spritesAdded += added;
+                    spritesUpdated += updated;
+                    spritesRemoved += removed;
+                }
+
+                if (enableSubDirectoryRemoving)
+                {
+                    // Remove output sprites for sub-directories that have been removed:
+                    foreach (var subDirectoryName in previousSubDirectoryNames)
+                    {
+                        // Remove all sprites from the associated output directory, and the directory itself as well if it's empty:
+                        if (!currentSubDirectoryNames.Contains(subDirectoryName))
+                            spritesRemoved += RemoveOutputSprites(Path.Combine(outputDirectory, subDirectoryName));
+                    }
+                }
+
+                SaveSubDirectoriesHistory(inputDirectory, previousSubDirectoryNames.Union(currentSubDirectoryNames));
+            }
+
+            return (spritesAdded, spritesUpdated, spritesRemoved);
         }
 
-        static void MakeSprite(string inputPath, string outputPath)
+        static int RemoveOutputSprites(string directory)
         {
-            throw new NotImplementedException();
+            var spritesRemoved = 0;
+
+            // First remove all sprite files:
+            foreach (var spriteFilePath in Directory.EnumerateFiles(directory, "*.spr"))
+            {
+                try
+                {
+                    File.Delete(spriteFilePath);
+                    spritesRemoved += 1;
+                }
+                catch (Exception ex)
+                {
+                    Log($"Failed to remove '{spriteFilePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                }
+            }
+
+            // Then recursively try removing sub-directories:
+            foreach (var subDirectoryPath in Directory.EnumerateDirectories(directory))
+                spritesRemoved += RemoveOutputSprites(subDirectoryPath);
+
+            try
+            {
+                // Finally, remove this directory, but only if it's now empty:
+                if (!Directory.EnumerateFiles(directory).Any() && !Directory.EnumerateDirectories(directory).Any())
+                    Directory.Delete(directory);
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to remove '{directory}': {ex.GetType().Name}: '{ex.Message}'.");
+            }
+
+            return spritesRemoved;
         }
 
-
-        // Sprite making:
         static string GetSpriteName(string path)
         {
             var name = Path.GetFileNameWithoutExtension(path);
@@ -621,7 +708,7 @@ namespace SpriteMaker
             return File.ReadAllLines(path)
                 .Select(line => line.Split())
                 .ToDictionary(
-                    parts => parts[0],
+                    parts => HttpUtility.UrlDecode(parts[0]),
                     parts => (parts.Length < 2) ? null : ParseHex(parts[1]));
         }
 
@@ -629,7 +716,7 @@ namespace SpriteMaker
         {
             File.WriteAllLines(
                 GetFileHashesFilePath(directory),
-                fileHashes.Select(kv => (kv.Value == null) ? kv.Key : $"{kv.Key} {string.Join("", kv.Value.Select(b => b.ToString("x2")))}"));
+                fileHashes.Select(kv => HttpUtility.UrlEncode(kv.Key) + ((kv.Value == null) ? "" : " " + string.Join("", kv.Value.Select(b => b.ToString("x2"))))));
         }
 
         static string GetFileHashesFilePath(string directory) => Path.Combine(directory, "filehashes.dat");
@@ -642,6 +729,29 @@ namespace SpriteMaker
         }
 
         static bool IsEqualHash(byte[] hash1, byte[] hash2) => hash1 != null && hash2 != null && Enumerable.SequenceEqual(hash1, hash2);
+
+
+        static HashSet<string> LoadSubDirectoriesHistory(string directory)
+        {
+            var path = GetSubDirectoriesFilePath(directory);
+            if (!File.Exists(path))
+                return new HashSet<string>();
+
+            return File.ReadAllLines(path)
+                .Select(HttpUtility.UrlDecode)
+                .ToHashSet();
+        }
+
+        static void SaveSubDirectoriesHistory(string directory, IEnumerable<string> directoryNames)
+        {
+            File.WriteAllLines(
+                GetSubDirectoriesFilePath(directory),
+                directoryNames
+                    .Distinct()
+                    .Select(HttpUtility.UrlEncode));
+        }
+
+        static string GetSubDirectoriesFilePath(string directory) => Path.Combine(directory, "subdirectories.dat");
 
 
         // TODO: Move this to a common place in Shared -- it's duplicated 3 times now!
@@ -657,6 +767,7 @@ namespace SpriteMaker
 
             return bytes;
         }
+
 
         static void Log(string message)
         {
