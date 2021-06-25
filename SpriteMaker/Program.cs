@@ -338,12 +338,20 @@ namespace SpriteMaker
                             var spriteTextureFormat = firstFile.filenameSettings.TextureFormat ?? firstFile.spriteSettings.settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
 
                             var sprite = CreateSpriteFromImages(frameImages, spriteName, spriteOrientation, spriteTextureFormat);
-                            sprite.Save(Path.Combine(outputDirectory, spriteName + ".spr"));
+                            var spriteFilePath = Path.Combine(outputDirectory, spriteName + ".spr");
+                            sprite.Save(spriteFilePath);
 
+                            var inputImageCount = imagePathsAndSettings.Length;
                             if (isExistingSprite)
+                            {
                                 spritesUpdated += 1;
+                                Log($"Updated sprite '{spriteFilePath}' (from '{firstFile.path}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
+                            }
                             else
+                            {
                                 spritesAdded += 1;
+                                Log($"Added sprite '{spriteFilePath}' (from '{firstFile.path}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -370,6 +378,7 @@ namespace SpriteMaker
                             {
                                 File.Delete(spriteFilePath);
                                 spritesRemoved += 1;
+                                Log($"Removed sprite '{spriteFilePath}'.");
                             }
                         }
                         catch (Exception ex)

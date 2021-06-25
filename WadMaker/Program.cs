@@ -314,8 +314,7 @@ namespace WadMaker
                                 }
                             }
                             texturesUpdated += 1;
-                            if (updateExistingWad)
-                                Log($"Updated texture '{textureName}' (from {filePath}).");
+                            Log($"Updated texture '{textureName}' (from '{filePath}').");
                         }
                         else
                         {
@@ -323,7 +322,7 @@ namespace WadMaker
                             wad.Textures.Add(texture);
                             wadTextureNames.Add(textureName);
                             texturesAdded += 1;
-                            Log($"Added texture '{textureName}' (from {filePath}).");
+                            Log($"Added texture '{textureName}' (from '{filePath}').");
                         }
                     }
                     catch (Exception ex)
