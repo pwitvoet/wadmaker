@@ -63,7 +63,7 @@ namespace Shared
         }
 
         /// <summary>
-        /// Returns the counts of all colors that are used in the given images.
+        /// Returns the counts of all colors that are used in the first frames of the given images.
         /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>
         public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<Image<Rgba32>> images, Func<Rgba32, bool> ignoreColor)
@@ -76,15 +76,22 @@ namespace Shared
         }
 
         /// <summary>
-        /// Adds the counts of all colors that are used in the given image to the given color histogram.
+        /// Adds the counts of all colors that are used in the first frame of the given image to the given color histogram.
         /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>
         public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, Image<Rgba32> image, Func<Rgba32, bool> ignoreColor)
+            => UpdateColorHistogram(colorHistogram, image.Frames[0], ignoreColor);
+
+        /// <summary>
+        /// Adds the counts of all colors that are used in the given image frame to the given color histogram.
+        /// Only the R, G and B channels are taken into account, alpha is ignored.
+        /// </summary>
+        public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, ImageFrame<Rgba32> imageFrame, Func<Rgba32, bool> ignoreColor)
         {
-            for (int y = 0; y < image.Height; y++)
+            for (int y = 0; y < imageFrame.Height; y++)
             {
-                var rowSpan = image.GetPixelRowSpan(y);
-                for (int x = 0; x < image.Width; x++)
+                var rowSpan = imageFrame.GetPixelRowSpan(y);
+                for (int x = 0; x < imageFrame.Width; x++)
                 {
                     var color = rowSpan[x];
                     if (ignoreColor(color))

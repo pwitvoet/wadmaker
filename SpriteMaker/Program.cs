@@ -547,7 +547,10 @@ namespace SpriteMaker
             var colorHistogram = new Dictionary<Rgba32, int>();
             var isAlphaTest = spriteTextureFormat == SpriteTextureFormat.AlphaTest;
             foreach (var frameImage in frameImages)
-                ColorQuantization.UpdateColorHistogram(colorHistogram, frameImage.Image, MakeTransparencyPredicate(frameImage));
+            {
+                foreach (ImageFrame<Rgba32> frame in frameImage.Image.Frames)
+                    ColorQuantization.UpdateColorHistogram(colorHistogram, frame, MakeTransparencyPredicate(frameImage));
+            }
 
             // Create a suitable palette, taking sprite texture format into account:
             var maxColors = isAlphaTest ? 255 : 256;
@@ -585,22 +588,25 @@ namespace SpriteMaker
 
 
             // Create the sprite and its frames:
-            var spriteWidth = frameImages.Max(frameImage => frameImage.Image.Width);
-            var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Height);
-            var isAnimatedSprite = frameImages.Count() > 1;
+            var spriteWidth = frameImages.Max(frameImage => frameImage.Image.Frames.OfType<ImageFrame<Rgba32>>().Max(frame => frame.Width));
+            var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Frames.OfType<ImageFrame<Rgba32>>().Max(frame => frame.Height));
+            var isAnimatedSprite = frameImages.Count() > 1 || frameImages[0].Image.Frames.Count > 1;
 
             var sprite = Sprite.CreateSprite(spriteOrientation, spriteTextureFormat, spriteWidth, spriteHeight, palette);
             foreach (var frameImage in frameImages)
             {
                 var image = frameImage.Image;
-                sprite.Frames.Add(new Frame {
-                    FrameGroup = 0,
-                    FrameOriginX = -(frameImage.Settings.FrameOrigin?.X ?? (image.Width / 2)),
-                    FrameOriginY = frameImage.Settings.FrameOrigin?.Y ?? (image.Height / 2),
-                    FrameWidth = (uint)image.Width,
-                    FrameHeight = (uint)image.Height,
-                    ImageData = CreateFrameImageData(frameImage.Image, palette, colorIndexMappingCache, frameImage.Settings, MakeTransparencyPredicate(frameImage), disableDithering: isAnimatedSprite),
-                });
+                foreach (ImageFrame<Rgba32> frame in image.Frames)
+                {
+                    sprite.Frames.Add(new Frame {
+                        FrameGroup = 0,
+                        FrameOriginX = -(frameImage.Settings.FrameOrigin?.X ?? (frame.Width / 2)),
+                        FrameOriginY = frameImage.Settings.FrameOrigin?.Y ?? (frame.Height / 2),
+                        FrameWidth = (uint)frame.Width,
+                        FrameHeight = (uint)frame.Height,
+                        ImageData = CreateFrameImageData(frame, palette, colorIndexMappingCache, frameImage.Settings, MakeTransparencyPredicate(frameImage), disableDithering: isAnimatedSprite),
+                    });
+                }
             }
             return sprite;
 
@@ -667,7 +673,7 @@ namespace SpriteMaker
         }
 
         static byte[] CreateFrameImageData(
-            Image<Rgba32> image,
+            ImageFrame<Rgba32> imageFrame,
             Rgba32[] palette,
             IDictionary<Rgba32, int> colorIndexMappingCache,
             SpriteSettings spriteSettings,
@@ -684,20 +690,20 @@ namespace SpriteMaker
                     return ApplyPaletteWithoutDithering();
 
                 case DitheringAlgorithm.FloydSteinberg:
-                    return Dithering.FloydSteinberg(image, palette, getColorIndex, spriteSettings.DitherScale ?? 0.75f, isTransparent);
+                    return Dithering.FloydSteinberg(imageFrame, palette, getColorIndex, spriteSettings.DitherScale ?? 0.75f, isTransparent);
             }
 
 
             byte[] ApplyPaletteWithoutDithering()
             {
-                var textureData = new byte[image.Width * image.Height];
-                for (int y = 0; y < image.Height; y++)
+                var textureData = new byte[imageFrame.Width * imageFrame.Height];
+                for (int y = 0; y < imageFrame.Height; y++)
                 {
-                    var rowSpan = image.GetPixelRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
+                    var rowSpan = imageFrame.GetPixelRowSpan(y);
+                    for (int x = 0; x < imageFrame.Width; x++)
                     {
                         var color = rowSpan[x];
-                        textureData[y * image.Width + x] = (byte)getColorIndex(color);
+                        textureData[y * imageFrame.Width + x] = (byte)getColorIndex(color);
                     }
                 }
                 return textureData;

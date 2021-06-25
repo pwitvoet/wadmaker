@@ -15,12 +15,20 @@ namespace Shared
     public static class Dithering
     {
         /// <summary>
-        /// Uses Floyd-Steinberg dithering to create an 8-bit indexed canvas from the input canvas and the given palette.
+        /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the first frame of the input image and the given palette.
+        /// Error diffusion can be limited to make the dithering effect more subtle.
+        /// An optional predicate can be provided to skip dithering for certain colors, which can be used to prevent error diffusion from interfering with color-key transparency.
+        /// </summary>
+        public static byte[] FloydSteinberg(Image<Rgba32> image, Rgba32[] palette, Func<Rgba32, int> getColorIndex, float ditherScale = 1f, Func<Rgba32, bool> skipDithering = null)
+            => FloydSteinberg(image.Frames[0], palette, getColorIndex, ditherScale, skipDithering);
+
+        /// <summary>
+        /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the input image frame and the given palette.
         /// Error diffusion can be limited to make the dithering effect more subtle.
         /// An optional predicate can be provided to skip dithering for certain colors, which can be used to prevent error diffusion from interfering with color-key transparency.
         /// </summary>
         public static byte[] FloydSteinberg(
-            Image<Rgba32> image,
+            ImageFrame<Rgba32> image,
             Rgba32[] palette,
             Func<Rgba32, int> getColorIndex,
             float ditherScale = 1f,
