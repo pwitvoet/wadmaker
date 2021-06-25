@@ -335,9 +335,9 @@ namespace SpriteMaker
                             // Sprite settings:
                             var firstFile = imagePathsAndSettings.First();
                             var spriteOrientation = firstFile.filenameSettings.Orientation ?? firstFile.spriteSettings.settings.SpriteOrientation ?? SpriteOrientation.Parallel;
-                            var spriteRenderMode = firstFile.filenameSettings.RenderMode ?? firstFile.spriteSettings.settings.SpriteRenderMode ?? SpriteRenderMode.Additive;
+                            var spriteTextureFormat = firstFile.filenameSettings.TextureFormat ?? firstFile.spriteSettings.settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
 
-                            var sprite = CreateSpriteFromImages(frameImages, spriteName, spriteOrientation, spriteRenderMode);
+                            var sprite = CreateSpriteFromImages(frameImages, spriteName, spriteOrientation, spriteTextureFormat);
                             sprite.Save(Path.Combine(outputDirectory, spriteName + ".spr"));
 
                             if (isExistingSprite)
@@ -526,18 +526,18 @@ namespace SpriteMaker
             return frameImages.ToArray();
         }
 
-        static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, string spriteName, SpriteOrientation spriteOrientation, SpriteRenderMode spriteRenderMode)
+        static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, string spriteName, SpriteOrientation spriteOrientation, SpriteTextureFormat spriteTextureFormat)
         {
-            if (spriteRenderMode == SpriteRenderMode.IndexAlpha)
+            if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
                 return CreateIndexAlphaSpriteFromImages(frameImages, spriteName, spriteOrientation);
 
             // Create a single color histogram from all frame images:
             var colorHistogram = new Dictionary<Rgba32, int>();
-            var isAlphaTest = spriteRenderMode == SpriteRenderMode.AlphaTest;
+            var isAlphaTest = spriteTextureFormat == SpriteTextureFormat.AlphaTest;
             foreach (var frameImage in frameImages)
                 ColorQuantization.UpdateColorHistogram(colorHistogram, frameImage.Image, MakeTransparencyPredicate(frameImage));
 
-            // Create a suitable palette, taking sprite render mode into account:
+            // Create a suitable palette, taking sprite texture format into account:
             var maxColors = isAlphaTest ? 255 : 256;
             var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
 
@@ -577,7 +577,7 @@ namespace SpriteMaker
             var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Height);
             var isAnimatedSprite = frameImages.Count() > 1;
 
-            var sprite = Sprite.CreateSprite(spriteOrientation, spriteRenderMode, spriteWidth, spriteHeight, palette);
+            var sprite = Sprite.CreateSprite(spriteOrientation, spriteTextureFormat, spriteWidth, spriteHeight, palette);
             foreach (var frameImage in frameImages)
             {
                 var image = frameImage.Image;
@@ -622,7 +622,7 @@ namespace SpriteMaker
 
             var spriteWidth = frameImages.Max(frameImage => frameImage.Image.Width);
             var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Height);
-            var sprite = Sprite.CreateSprite(spriteOrientation, SpriteRenderMode.IndexAlpha, spriteWidth, spriteHeight, palette);
+            var sprite = Sprite.CreateSprite(spriteOrientation, SpriteTextureFormat.IndexAlpha, spriteWidth, spriteHeight, palette);
             foreach (var frameImage in frameImages)
             {
                 var mode = frameImage.Settings.IndexAlphaTransparencySource ?? IndexAlphaTransparencySource.AlphaChannel;

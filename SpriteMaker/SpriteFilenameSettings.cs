@@ -8,7 +8,7 @@ namespace SpriteMaker
     struct SpriteFilenameSettings
     {
         public SpriteOrientation? Orientation { get; set; }
-        public SpriteRenderMode? RenderMode { get; set; }
+        public SpriteTextureFormat? TextureFormat { get; set; }
         public Size? SpritesheetTileSize { get; set; }
         public int? FrameNumber { get; set; }
 
@@ -23,8 +23,8 @@ namespace SpriteMaker
             {
                 if (SpriteMakingSettings.TryParseSpriteOrientation(segment, out var orientation))
                     settings.Orientation = orientation;
-                else if (SpriteMakingSettings.TryParseSpriteRenderMode(segment, out var renderMode))
-                    settings.RenderMode = renderMode;
+                else if (SpriteMakingSettings.TryParseSpriteTextureFormat(segment, out var textureFormat))
+                    settings.TextureFormat = textureFormat;
                 else if (TryParseSpritesheetTileSize(segment, out var spritesheetTileSize))
                     settings.SpritesheetTileSize = spritesheetTileSize;
                 else if (int.TryParse(segment, out var frameNumber))

@@ -13,7 +13,7 @@ namespace SpriteMaker
 
     /// <summary>
     /// Settings for converting an image or group of images to a sprite.
-    /// The orientation and render mode settings apply to the sprite itself.
+    /// The orientation and texture format settings apply to the sprite itself.
     /// All other settings can be applied to individual frame images.
     /// </summary>
     struct SpriteSettings
@@ -34,18 +34,18 @@ namespace SpriteMaker
         public SpriteOrientation? SpriteOrientation { get; set; }
 
         /// <summary>
-        /// The sprite's render mode. Defaults to <see cref="SpriteRenderMode.Additive"/>.
+        /// The sprite's texture format. Defaults to <see cref="SpriteTextureFormat.Additive"/>.
         /// This can be set by adding a specific suffix to a source image filename:
         /// <list type="bullet">
-        /// <item>".n": <see cref="SpriteRenderMode.Normal"/></item>
-        /// <item>".a": <see cref="SpriteRenderMode.Additive"/> (default, suffix can be omitted)</item>
-        /// <item>".ia": <see cref="SpriteRenderMode.IndexAlpha"/></item>
-        /// <item>".at": <see cref="SpriteRenderMode.AlphaTest"/></item>
+        /// <item>".n": <see cref="SpriteTextureFormat.Normal"/></item>
+        /// <item>".a": <see cref="SpriteTextureFormat.Additive"/> (default, suffix can be omitted)</item>
+        /// <item>".ia": <see cref="SpriteTextureFormat.IndexAlpha"/></item>
+        /// <item>".at": <see cref="SpriteTextureFormat.AlphaTest"/></item>
         /// </list>
         /// Filename suffixes take priority over spritemaker.config settings.
         /// For multi-frame sprites, only the settings for the first frame image will apply.
         /// </summary>
-        public SpriteRenderMode? SpriteRenderMode { get; set; }
+        public SpriteTextureFormat? SpriteTextureFormat { get; set; }
 
 
         /// <summary>

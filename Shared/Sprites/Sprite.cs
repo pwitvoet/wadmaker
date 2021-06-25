@@ -15,7 +15,7 @@ namespace Shared.Sprites
         ParallelOriented = 4,
     }
 
-    public enum SpriteRenderMode : uint
+    public enum SpriteTextureFormat : uint
     {
         Normal = 0,
         Additive = 1,
@@ -31,14 +31,14 @@ namespace Shared.Sprites
 
     public class Sprite
     {
-        public static Sprite CreateSprite(SpriteOrientation orientation, SpriteRenderMode renderMode, int maxWidth, int maxHeight, Rgba32[] palette)
+        public static Sprite CreateSprite(SpriteOrientation orientation, SpriteTextureFormat textureFormat, int maxWidth, int maxHeight, Rgba32[] palette)
         {
             if (maxWidth < 1 || maxHeight < 1) throw new ArgumentException("Width and height must greater than zero.");
             if (palette?.Count() > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
 
             return new Sprite(
                 orientation,
-                renderMode,
+                textureFormat,
                 (float)Math.Sqrt(maxWidth * maxWidth + maxHeight * maxHeight) / 2,
                 (uint)maxWidth,
                 (uint)maxHeight,
@@ -49,7 +49,7 @@ namespace Shared.Sprites
 
 
         public SpriteOrientation Orientation { get; set; }
-        public SpriteRenderMode RenderMode { get; set; }
+        public SpriteTextureFormat TextureFormat { get; set; }
         public float BoundingRadius { get; }
         public uint MaximumWidth { get; }
         public uint MaximumHeight { get; }
@@ -70,7 +70,7 @@ namespace Shared.Sprites
             stream.Write("IDSP");
             stream.Write((uint)2);  // version
             stream.Write((uint)Orientation);
-            stream.Write((uint)RenderMode);
+            stream.Write((uint)TextureFormat);
             stream.Write(BoundingRadius);
             stream.Write(MaximumWidth);
             stream.Write(MaximumHeight);
@@ -101,7 +101,7 @@ namespace Shared.Sprites
 
             var version = stream.ReadUint();
             var orientation = (SpriteOrientation)stream.ReadUint();
-            var renderMode = (SpriteRenderMode)stream.ReadUint();
+            var textureFormat = (SpriteTextureFormat)stream.ReadUint();
             var boundingRadius = stream.ReadFloat();
             var maximumWidth = stream.ReadUint();
             var maximumHeight = stream.ReadUint();
@@ -118,7 +118,7 @@ namespace Shared.Sprites
                 .Select(i => ReadFrame(stream))
                 .ToArray();
 
-            var sprite = new Sprite(orientation, renderMode, boundingRadius, maximumWidth, maximumHeight, beamLength, synchronization, palette);
+            var sprite = new Sprite(orientation, textureFormat, boundingRadius, maximumWidth, maximumHeight, beamLength, synchronization, palette);
             sprite.Frames.AddRange(frames);
             return sprite;
         }
@@ -151,7 +151,7 @@ namespace Shared.Sprites
 
         private Sprite(
             SpriteOrientation orientation,
-            SpriteRenderMode renderMode,
+            SpriteTextureFormat textureFormat,
             float boundingRadius,
             uint maximumWidth,
             uint maximumHeight,
@@ -160,7 +160,7 @@ namespace Shared.Sprites
             Rgba32[] palette)
         {
             Orientation = orientation;
-            RenderMode = renderMode;
+            TextureFormat = textureFormat;
             BoundingRadius = boundingRadius;
             MaximumWidth = maximumWidth;
             MaximumHeight = maximumHeight;

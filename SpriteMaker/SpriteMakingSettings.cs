@@ -21,7 +21,7 @@ namespace SpriteMaker
     class SpriteMakingSettings
     {
         const string SpriteOrientationKey = "orientation";
-        const string SpriteRenderModeKey = "render-mode";
+        const string SpriteTextureFormatKey = "texture-format";
         const string FrameOriginKey = "frame-origin";
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
@@ -70,7 +70,7 @@ namespace SpriteMaker
                 {
                     // More specific rules override settings defined by less specific rules:
                     if (ruleSettings.SpriteOrientation != null) spriteSettings.SpriteOrientation = ruleSettings.SpriteOrientation;
-                    if (ruleSettings.SpriteRenderMode != null) spriteSettings.SpriteRenderMode = ruleSettings.SpriteRenderMode;
+                    if (ruleSettings.SpriteTextureFormat != null) spriteSettings.SpriteTextureFormat = ruleSettings.SpriteTextureFormat;
                     if (ruleSettings.FrameOrigin != null) spriteSettings.FrameOrigin = ruleSettings.FrameOrigin;
                     if (ruleSettings.DitheringAlgorithm != null) spriteSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
                     if (ruleSettings.DitherScale != null) spriteSettings.DitherScale = ruleSettings.DitherScale;
@@ -262,9 +262,9 @@ namespace SpriteMaker
                         spriteSettings.SpriteOrientation = ParseToken(ParseSpriteOrientation, "sprite orientation");
                         break;
 
-                    case SpriteRenderModeKey:
+                    case SpriteTextureFormatKey:
                         RequireToken(":");
-                        spriteSettings.SpriteRenderMode = ParseToken(ParseSpriteRenderMode, "sprite render mode");
+                        spriteSettings.SpriteTextureFormat = ParseToken(ParseSpriteTextureFormat, "sprite texture format");
                         break;
 
                     case FrameOriginKey:
@@ -398,12 +398,12 @@ namespace SpriteMaker
             return orientation;
         }
 
-        private static SpriteRenderMode ParseSpriteRenderMode(string str)
+        private static SpriteTextureFormat ParseSpriteTextureFormat(string str)
         {
-            if (!TryParseSpriteRenderMode(str, out var renderMode))
-                throw new InvalidDataException($"Invalid sprite render mode: '{str}'.");
+            if (!TryParseSpriteTextureFormat(str, out var textureFormat))
+                throw new InvalidDataException($"Invalid sprite texture format: '{str}'.");
 
-            return renderMode;
+            return textureFormat;
         }
 
         private static DitheringAlgorithm ParseDitheringAlgorithm(string str)
@@ -441,7 +441,7 @@ namespace SpriteMaker
                         var settings = rule.SpriteSettings.Value;
 
                         if (settings.SpriteOrientation != null) writer.Write($" {SpriteOrientationKey}: {Serialize(settings.SpriteOrientation.Value)}");
-                        if (settings.SpriteRenderMode != null) writer.Write($" {SpriteRenderModeKey}: {Serialize(settings.SpriteRenderMode.Value)}");
+                        if (settings.SpriteTextureFormat != null) writer.Write($" {SpriteTextureFormatKey}: {Serialize(settings.SpriteTextureFormat.Value)}");
                         if (settings.FrameOrigin != null) writer.Write($" {FrameOriginKey}: {settings.FrameOrigin.Value.X} {settings.FrameOrigin.Value.Y}");
                         if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringAlgorithmKey}: {Serialize(settings.DitheringAlgorithm.Value)}");
                         if (settings.DitherScale != null) writer.Write($" {DitherScaleKey}: {settings.DitherScale.Value}");
@@ -474,15 +474,15 @@ namespace SpriteMaker
             }
         }
 
-        private static string Serialize(SpriteRenderMode renderMode)
+        private static string Serialize(SpriteTextureFormat textureFormat)
         {
-            switch (renderMode)
+            switch (textureFormat)
             {
-                case SpriteRenderMode.Normal: return "normal";
+                case SpriteTextureFormat.Normal: return "normal";
                 default:
-                case SpriteRenderMode.Additive: return "additive";
-                case SpriteRenderMode.IndexAlpha: return "index-alpha";
-                case SpriteRenderMode.AlphaTest: return "alpha-test";
+                case SpriteTextureFormat.Additive: return "additive";
+                case SpriteTextureFormat.IndexAlpha: return "index-alpha";
+                case SpriteTextureFormat.AlphaTest: return "alpha-test";
             }
         }
 
@@ -544,32 +544,32 @@ namespace SpriteMaker
             }
         }
 
-        public static bool TryParseSpriteRenderMode(string str, out SpriteRenderMode renderMode)
+        public static bool TryParseSpriteTextureFormat(string str, out SpriteTextureFormat textureFormat)
         {
             switch (str.ToLowerInvariant())
             {
                 case "n":
                 case "normal":
-                    renderMode = SpriteRenderMode.Normal;
+                    textureFormat = SpriteTextureFormat.Normal;
                     return true;
 
                 case "a":
                 case "additive":
-                    renderMode = SpriteRenderMode.Additive;
+                    textureFormat = SpriteTextureFormat.Additive;
                     return true;
 
                 case "ia":
                 case "index-alpha":
-                    renderMode = SpriteRenderMode.IndexAlpha;
+                    textureFormat = SpriteTextureFormat.IndexAlpha;
                     return true;
 
                 case "at":
                 case "alpha-test":
-                    renderMode = SpriteRenderMode.AlphaTest;
+                    textureFormat = SpriteTextureFormat.AlphaTest;
                     return true;
 
                 default:
-                    renderMode = default;
+                    textureFormat = default;
                     return false;
             }
         }
