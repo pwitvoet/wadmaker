@@ -450,6 +450,9 @@ namespace SpriteMaker
 
         static int RemoveOutputSprites(string directory)
         {
+            if (!Directory.Exists(directory))
+                return 0;
+
             var spritesRemoved = 0;
 
             // First remove all sprite files:
