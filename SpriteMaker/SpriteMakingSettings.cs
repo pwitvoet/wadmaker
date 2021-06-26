@@ -134,18 +134,18 @@ namespace SpriteMaker
 
 
         /// <summary>
-        /// Reads texture settings from the wadmaker.config file in the given folder, if it exists.
-        /// Also reads and updates wadmaker.dat, for tracking last-modified times for each individual rule,
-        /// so only textures that are affected by a modified rule will be rebuilt.
+        /// Reads sprite settings from the spritemaker.config file in the given folder, if it exists.
+        /// If <paramref name="ignoreHistory"/> is true then this also reads and updates spritemaker.dat,
+        /// for tracking last-modified times for each individual rule, so only sprites that are affected by a modified rule will be rebuilt.
         /// </summary>
-        public static SpriteMakingSettings Load(string folder)
+        public static SpriteMakingSettings Load(string folder, bool ignoreHistory = false)
         {
             var configFilePath = Path.Combine(folder, ConfigFilename);
             var timestampFilePath = Path.Combine(folder, TimestampFilename);
 
             // First read the timestamps file, which stores the last known state and modification time of each rule:
             var oldRules = new Dictionary<string, Rule>();
-            if (File.Exists(timestampFilePath))
+            if (!ignoreHistory && File.Exists(timestampFilePath))
             {
                 foreach (var line in File.ReadAllLines(timestampFilePath))
                 {
@@ -170,7 +170,7 @@ namespace SpriteMaker
             }
 
             // Combine this information to determine when each rule was last modified
-            // (without this, a single rule change would trigger a rebuild for all textures that match *any* rule):
+            // (without this, a single rule change would trigger a rebuild for all sprites that match *any* rule):
             var newNamePatterns = newRules.Keys.ToHashSet();
             var oldNamePatterns = oldRules.Keys.ToHashSet();
             var existingNamePatterns = newNamePatterns.Intersect(oldNamePatterns).ToArray();
@@ -201,8 +201,11 @@ namespace SpriteMaker
                 newRules[namePattern] = removedRule;
             }
 
-            // Now save this back to wadmaker.config:
-            SaveTimestampedRules(timestampFilePath, oldRules);
+            // Now save this back to spritemaker.dat:
+            if (!ignoreHistory)
+            {
+                SaveTimestampedRules(timestampFilePath, oldRules);
+            }
 
             // Finally, return the new rules, which are now properly timestamped:
             return new SpriteMakingSettings(newRules.Values);
