@@ -505,10 +505,10 @@ namespace SpriteMaker
 
                     // Sprite settings:
                     var firstFile = imagePathsAndSettings.First();
-                    var spriteOrientation = firstFile.filenameSettings.Orientation ?? firstFile.spriteSettings.settings.SpriteOrientation ?? SpriteOrientation.Parallel;
+                    var spriteType = firstFile.filenameSettings.Type ?? firstFile.spriteSettings.settings.SpriteType ?? SpriteType.Parallel;
                     var spriteTextureFormat = firstFile.filenameSettings.TextureFormat ?? firstFile.spriteSettings.settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
 
-                    var sprite = CreateSpriteFromImages(frameImages, spriteName, spriteOrientation, spriteTextureFormat);
+                    var sprite = CreateSpriteFromImages(frameImages, spriteType, spriteTextureFormat);
                     sprite.Save(outputSpritePath);
 
                     return true;
@@ -611,10 +611,10 @@ namespace SpriteMaker
             return frameImages.ToArray();
         }
 
-        static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, string spriteName, SpriteOrientation spriteOrientation, SpriteTextureFormat spriteTextureFormat)
+        static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, SpriteType spriteType, SpriteTextureFormat spriteTextureFormat)
         {
             if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
-                return CreateIndexAlphaSpriteFromImages(frameImages, spriteName, spriteOrientation);
+                return CreateIndexAlphaSpriteFromImages(frameImages, spriteType);
 
             // Create a single color histogram from all frame images:
             var colorHistogram = new Dictionary<Rgba32, int>();
@@ -665,14 +665,14 @@ namespace SpriteMaker
             var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Frames.OfType<ImageFrame<Rgba32>>().Max(frame => frame.Height));
             var isAnimatedSprite = frameImages.Count() > 1 || frameImages[0].Image.Frames.Count > 1;
 
-            var sprite = Sprite.CreateSprite(spriteOrientation, spriteTextureFormat, spriteWidth, spriteHeight, palette);
+            var sprite = Sprite.CreateSprite(spriteType, spriteTextureFormat, spriteWidth, spriteHeight, palette);
             foreach (var frameImage in frameImages)
             {
                 var image = frameImage.Image;
                 foreach (ImageFrame<Rgba32> frame in image.Frames)
                 {
                     sprite.Frames.Add(new Frame {
-                        FrameGroup = 0,
+                        Type = FrameType.Single,
                         FrameOriginX = -(frameImage.Settings.FrameOrigin?.X ?? (frame.Width / 2)),
                         FrameOriginY = frameImage.Settings.FrameOrigin?.Y ?? (frame.Height / 2),
                         FrameWidth = (uint)frame.Width,
@@ -694,7 +694,7 @@ namespace SpriteMaker
             }
         }
 
-        static Sprite CreateIndexAlphaSpriteFromImages(IList<FrameImage> frameImages, string spriteName, SpriteOrientation spriteOrientation)
+        static Sprite CreateIndexAlphaSpriteFromImages(IList<FrameImage> frameImages, SpriteType spriteType)
         {
             Rgba32 decalColor;
             if (frameImages.First().Settings.IndexAlphaColor is Rgba32 indexAlphaColor)
@@ -713,7 +713,7 @@ namespace SpriteMaker
 
             var spriteWidth = frameImages.Max(frameImage => frameImage.Image.Width);
             var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Height);
-            var sprite = Sprite.CreateSprite(spriteOrientation, SpriteTextureFormat.IndexAlpha, spriteWidth, spriteHeight, palette);
+            var sprite = Sprite.CreateSprite(spriteType, SpriteTextureFormat.IndexAlpha, spriteWidth, spriteHeight, palette);
             foreach (var frameImage in frameImages)
             {
                 var mode = frameImage.Settings.IndexAlphaTransparencySource ?? IndexAlphaTransparencySource.AlphaChannel;
@@ -722,7 +722,7 @@ namespace SpriteMaker
 
                 var image = frameImage.Image;
                 var frame = new Frame {
-                    FrameGroup = 0,
+                    Type = FrameType.Single,
                     FrameOriginX = -(frameImage.Settings.FrameOrigin?.X ?? (image.Width / 2)),
                     FrameOriginY = frameImage.Settings.FrameOrigin?.Y ?? (image.Height / 2),
                     FrameWidth = (uint)image.Width,

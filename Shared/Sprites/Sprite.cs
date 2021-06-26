@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Shared.Sprites
 {
-    public enum SpriteOrientation : uint
+    public enum SpriteType : uint
     {
         ParallelUpright = 0,
         Upright = 1,
@@ -31,13 +31,13 @@ namespace Shared.Sprites
 
     public class Sprite
     {
-        public static Sprite CreateSprite(SpriteOrientation orientation, SpriteTextureFormat textureFormat, int maxWidth, int maxHeight, Rgba32[] palette)
+        public static Sprite CreateSprite(SpriteType type, SpriteTextureFormat textureFormat, int maxWidth, int maxHeight, Rgba32[] palette)
         {
             if (maxWidth < 1 || maxHeight < 1) throw new ArgumentException("Width and height must greater than zero.");
             if (palette?.Count() > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
 
             return new Sprite(
-                orientation,
+                type,
                 textureFormat,
                 (float)Math.Sqrt(maxWidth * maxWidth + maxHeight * maxHeight) / 2,
                 (uint)maxWidth,
@@ -48,7 +48,7 @@ namespace Shared.Sprites
         }
 
 
-        public SpriteOrientation Orientation { get; set; }
+        public SpriteType Type { get; set; }
         public SpriteTextureFormat TextureFormat { get; set; }
         public float BoundingRadius { get; }
         public uint MaximumWidth { get; }
@@ -69,7 +69,7 @@ namespace Shared.Sprites
         {
             stream.Write("IDSP");
             stream.Write((uint)2);  // version
-            stream.Write((uint)Orientation);
+            stream.Write((uint)Type);
             stream.Write((uint)TextureFormat);
             stream.Write(BoundingRadius);
             stream.Write(MaximumWidth);
@@ -100,7 +100,7 @@ namespace Shared.Sprites
                 throw new InvalidDataException($"Expected file to start with 'IDSP' but found '{fileSignature}'.");
 
             var version = stream.ReadUint();
-            var orientation = (SpriteOrientation)stream.ReadUint();
+            var type = (SpriteType)stream.ReadUint();
             var textureFormat = (SpriteTextureFormat)stream.ReadUint();
             var boundingRadius = stream.ReadFloat();
             var maximumWidth = stream.ReadUint();
@@ -118,7 +118,7 @@ namespace Shared.Sprites
                 .Select(i => ReadFrame(stream))
                 .ToArray();
 
-            var sprite = new Sprite(orientation, textureFormat, boundingRadius, maximumWidth, maximumHeight, beamLength, synchronization, palette);
+            var sprite = new Sprite(type, textureFormat, boundingRadius, maximumWidth, maximumHeight, beamLength, synchronization, palette);
             sprite.Frames.AddRange(frames);
             return sprite;
         }
@@ -126,7 +126,7 @@ namespace Shared.Sprites
 
         private static void WriteFrame(Stream stream, Frame frame)
         {
-            stream.Write(frame.FrameGroup);
+            stream.Write((uint)frame.Type);
             stream.Write(frame.FrameOriginX);
             stream.Write(frame.FrameOriginY);
             stream.Write(frame.FrameWidth);
@@ -138,7 +138,7 @@ namespace Shared.Sprites
         {
             var frame = new Frame();
 
-            frame.FrameGroup = stream.ReadUint();
+            frame.Type = (FrameType)stream.ReadUint();
             frame.FrameOriginX = stream.ReadInt();
             frame.FrameOriginY = stream.ReadInt();
             frame.FrameWidth = stream.ReadUint();
@@ -150,7 +150,7 @@ namespace Shared.Sprites
 
 
         private Sprite(
-            SpriteOrientation orientation,
+            SpriteType type,
             SpriteTextureFormat textureFormat,
             float boundingRadius,
             uint maximumWidth,
@@ -159,7 +159,7 @@ namespace Shared.Sprites
             SpriteSynchronization synchronization,
             Rgba32[] palette)
         {
-            Orientation = orientation;
+            Type = type;
             TextureFormat = textureFormat;
             BoundingRadius = boundingRadius;
             MaximumWidth = maximumWidth;
@@ -170,9 +170,15 @@ namespace Shared.Sprites
         }
     }
 
+    public enum FrameType : uint
+    {
+        Single = 0,
+        Group = 1,  // Does not seem to be supported by Half-Life
+    }
+
     public class Frame
     {
-        public uint FrameGroup { get; set; }
+        public FrameType Type { get; set; }
         public int FrameOriginX { get; set; }
         public int FrameOriginY { get; set; }
         public uint FrameWidth { get; set; }

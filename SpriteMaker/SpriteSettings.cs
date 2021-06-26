@@ -13,25 +13,25 @@ namespace SpriteMaker
 
     /// <summary>
     /// Settings for converting an image or group of images to a sprite.
-    /// The orientation and texture format settings apply to the sprite itself.
+    /// The type and texture format settings apply to the sprite itself.
     /// All other settings can be applied to individual frame images.
     /// </summary>
     struct SpriteSettings
     {
         /// <summary>
-        /// The sprite's orientation. Defaults to <see cref="SpriteOrientation.Parallel"/>.
+        /// The sprite's type. Defaults to <see cref="SpriteType.Parallel"/>.
         /// This can be set by adding a specific suffix to a source image filename:
         /// <list type="bullet">
-        /// <item>".pu": <see cref="SpriteOrientation.ParallelUpright"/></item>
-        /// <item>".u": <see cref="SpriteOrientation.Upright"/></item>
-        /// <item>".p": <see cref="SpriteOrientation.Parallel"/> (default, suffix can be omitted)</item>
-        /// <item>".o": <see cref="SpriteOrientation.Oriented"/></item>
-        /// <item>".po": <see cref="SpriteOrientation.ParallelOriented"/></item>
+        /// <item>".pu": <see cref="SpriteType.ParallelUpright"/></item>
+        /// <item>".u": <see cref="SpriteType.Upright"/></item>
+        /// <item>".p": <see cref="SpriteType.Parallel"/> (default, suffix can be omitted)</item>
+        /// <item>".o": <see cref="SpriteType.Oriented"/></item>
+        /// <item>".po": <see cref="SpriteType.ParallelOriented"/></item>
         /// </list>
         /// Filename suffixes take priority over spritemaker.config settings.
         /// For multi-frame sprites, only the settings for the first frame image will apply.
         /// </summary>
-        public SpriteOrientation? SpriteOrientation { get; set; }
+        public SpriteType? SpriteType { get; set; }
 
         /// <summary>
         /// The sprite's texture format. Defaults to <see cref="SpriteTextureFormat.Additive"/>.

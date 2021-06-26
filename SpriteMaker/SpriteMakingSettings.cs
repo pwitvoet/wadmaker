@@ -20,7 +20,7 @@ namespace SpriteMaker
     /// </summary>
     class SpriteMakingSettings
     {
-        const string SpriteOrientationKey = "orientation";
+        const string SpriteTypeKey = "type";
         const string SpriteTextureFormatKey = "texture-format";
         const string FrameOriginKey = "frame-origin";
         const string DitheringAlgorithmKey = "dithering";
@@ -69,7 +69,7 @@ namespace SpriteMaker
                 if (rule.SpriteSettings is SpriteSettings ruleSettings)
                 {
                     // More specific rules override settings defined by less specific rules:
-                    if (ruleSettings.SpriteOrientation != null) spriteSettings.SpriteOrientation = ruleSettings.SpriteOrientation;
+                    if (ruleSettings.SpriteType != null) spriteSettings.SpriteType = ruleSettings.SpriteType;
                     if (ruleSettings.SpriteTextureFormat != null) spriteSettings.SpriteTextureFormat = ruleSettings.SpriteTextureFormat;
                     if (ruleSettings.FrameOrigin != null) spriteSettings.FrameOrigin = ruleSettings.FrameOrigin;
                     if (ruleSettings.DitheringAlgorithm != null) spriteSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
@@ -260,9 +260,9 @@ namespace SpriteMaker
 
                 switch (token.ToLowerInvariant())
                 {
-                    case SpriteOrientationKey:
+                    case SpriteTypeKey:
                         RequireToken(":");
-                        spriteSettings.SpriteOrientation = ParseToken(ParseSpriteOrientation, "sprite orientation");
+                        spriteSettings.SpriteType = ParseToken(ParseSpriteType, "sprite type");
                         break;
 
                     case SpriteTextureFormatKey:
@@ -393,12 +393,12 @@ namespace SpriteMaker
             string Token(int end) => line.Substring(start, end - start);
         }
 
-        private static SpriteOrientation ParseSpriteOrientation(string str)
+        private static SpriteType ParseSpriteType(string str)
         {
-            if (!TryParseSpriteOrientation(str, out var orientation))
-                throw new InvalidDataException($"Invalid sprite orientation: '{str}'.");
+            if (!TryParseSpriteType(str, out var type))
+                throw new InvalidDataException($"Invalid sprite type: '{str}'.");
 
-            return orientation;
+            return type;
         }
 
         private static SpriteTextureFormat ParseSpriteTextureFormat(string str)
@@ -443,7 +443,7 @@ namespace SpriteMaker
                     {
                         var settings = rule.SpriteSettings.Value;
 
-                        if (settings.SpriteOrientation != null) writer.Write($" {SpriteOrientationKey}: {Serialize(settings.SpriteOrientation.Value)}");
+                        if (settings.SpriteType != null) writer.Write($" {SpriteTypeKey}: {Serialize(settings.SpriteType.Value)}");
                         if (settings.SpriteTextureFormat != null) writer.Write($" {SpriteTextureFormatKey}: {Serialize(settings.SpriteTextureFormat.Value)}");
                         if (settings.FrameOrigin != null) writer.Write($" {FrameOriginKey}: {settings.FrameOrigin.Value.X} {settings.FrameOrigin.Value.Y}");
                         if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringAlgorithmKey}: {Serialize(settings.DitheringAlgorithm.Value)}");
@@ -464,16 +464,16 @@ namespace SpriteMaker
             }
         }
 
-        private static string Serialize(SpriteOrientation orientation)
+        private static string Serialize(SpriteType type)
         {
-            switch (orientation)
+            switch (type)
             {
-                case SpriteOrientation.ParallelUpright: return "parallel-upright";
-                case SpriteOrientation.Upright: return "upright";
+                case SpriteType.ParallelUpright: return "parallel-upright";
+                case SpriteType.Upright: return "upright";
                 default:
-                case SpriteOrientation.Parallel: return "parallel";
-                case SpriteOrientation.Oriented: return "oriented";
-                case SpriteOrientation.ParallelOriented: return "parallel-oriented";
+                case SpriteType.Parallel: return "parallel";
+                case SpriteType.Oriented: return "oriented";
+                case SpriteType.ParallelOriented: return "parallel-oriented";
             }
         }
 
@@ -512,37 +512,37 @@ namespace SpriteMaker
         private static string Serialize(Rgba32 color, bool includeAplha = true) => $"{color.R} {color.G} {color.B}" + (includeAplha ? $" {color.A}" : "");
 
 
-        public static bool TryParseSpriteOrientation(string str, out SpriteOrientation orientation)
+        public static bool TryParseSpriteType(string str, out SpriteType type)
         {
             switch (str.ToLowerInvariant())
             {
                 case "pu":
                 case "parallel-upright":
-                    orientation = SpriteOrientation.ParallelUpright;
+                    type = SpriteType.ParallelUpright;
                     return true;
 
                 case "u":
                 case "upright":
-                    orientation = SpriteOrientation.Upright;
+                    type = SpriteType.Upright;
                     return true;
 
                 case "p":
                 case "parallel":
-                    orientation = SpriteOrientation.Parallel;
+                    type = SpriteType.Parallel;
                     return true;
 
                 case "o":
                 case "oriented":
-                    orientation = SpriteOrientation.Oriented;
+                    type = SpriteType.Oriented;
                     return true;
 
                 case "po":
                 case "parallel-oriented":
-                    orientation = SpriteOrientation.ParallelOriented;
+                    type = SpriteType.ParallelOriented;
                     return true;
 
                 default:
-                    orientation = default;
+                    type = default;
                     return false;
             }
         }

@@ -7,7 +7,7 @@ namespace SpriteMaker
 {
     struct SpriteFilenameSettings
     {
-        public SpriteOrientation? Orientation { get; set; }
+        public SpriteType? Type { get; set; }
         public SpriteTextureFormat? TextureFormat { get; set; }
         public Size? SpritesheetTileSize { get; set; }
         public int? FrameNumber { get; set; }
@@ -21,8 +21,8 @@ namespace SpriteMaker
                 .Skip(1)
                 .Select(segment => segment.Trim().ToLowerInvariant()))
             {
-                if (SpriteMakingSettings.TryParseSpriteOrientation(segment, out var orientation))
-                    settings.Orientation = orientation;
+                if (SpriteMakingSettings.TryParseSpriteType(segment, out var type))
+                    settings.Type = type;
                 else if (SpriteMakingSettings.TryParseSpriteTextureFormat(segment, out var textureFormat))
                     settings.TextureFormat = textureFormat;
                 else if (TryParseSpritesheetTileSize(segment, out var spritesheetTileSize))
