@@ -428,11 +428,6 @@ namespace SpriteMaker
                     Log($"WARNING: not all input files for '{spriteName}' contain a frame number ({string.Join(", ", imagePaths)}). Skipping sprite.");
                     return false;
                 }
-                else if (imagePaths.Count() > 1 && imagePathsAndSettings.Any(file => file.filenameSettings.SpritesheetTileSize != null))
-                {
-                    Log($"WARNING: some input files for '{spriteName}' have a frame number and are marked as spritesheet, which is not supported. Skipping sprite.");
-                    return false;
-                }
 
                 // Read file hashes - these are used to detect filename changes, and will be stored for future change detection:
                 if (currentFileHashes != null && previousFileHashes != null)
