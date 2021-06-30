@@ -5,6 +5,11 @@ using System.Linq;
 
 namespace SpriteMaker
 {
+    /// <summary>
+    /// Some sprite and frame settings can be controlled directly with input image filenames by adding dot-separated segments at the end of the filename, before the extension.
+    /// For example, "fire.pu.ia.32x64.png" will result in a parallel-upright (.pu), index-alpha (.ia) sprite file named "fire.spr",
+    /// and each 32x64 tile from the input image produces a separate frame.
+    /// </summary>
     struct SpriteFilenameSettings
     {
         public SpriteType? Type { get; set; }

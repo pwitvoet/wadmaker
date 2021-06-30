@@ -195,7 +195,7 @@ namespace WadMaker
                 newRules[namePattern] = removedRule;
             }
 
-            // Now save this back to wadmaker.config:
+            // Now save this back to wadmaker.dat:
             SaveTimestampedRules(timestampFilePath, oldRules);
 
             // Finally, return the new rules, which are now properly timestamped:
