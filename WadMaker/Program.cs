@@ -222,12 +222,14 @@ namespace WadMaker
             var wad = updateExistingWad ? Wad.Load(outputWadFilePath) : new Wad();
             var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputWadFilePath).LastWriteTimeUtc : (DateTime?)null;
             var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
-            var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
+            var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
             var isDecalsWad = Path.GetFileNameWithoutExtension(outputWadFilePath).ToLowerInvariant() == "decals";
 
             // Multiple files can map to the same texture, due to different extensions and upper/lower-case differences.
             // We'll group files by texture name, to make these collisions easy to detect:
-            var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*", includeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToHashSet();
+            var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*", includeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                .Where(path => !ExternalConversion.IsConversionOutputDirectory(path))
+                .ToHashSet();
             var textureImagePaths = allInputDirectoryFiles
                 .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !path.Contains(".mipmap"))
@@ -289,14 +291,20 @@ namespace WadMaker
                             if (textureSettings.ConverterArguments == null)
                                 throw new InvalidDataException($"Unable to convert '{filePath}': missing converter arguments.");
 
-                            imageFilePath = Path.Combine(conversionOutputDirectory, textureName + ".png");
+                            imageFilePath = Path.Combine(conversionOutputDirectory, textureName);
                             Directory.CreateDirectory(conversionOutputDirectory);
 
-                            ExecuteConversionCommand(
-                                textureSettings.Converter,
-                                textureSettings.ConverterArguments,
-                                filePath,
-                                imageFilePath);
+                            var outputFilePaths = ExternalConversion.ExecuteConversionCommand(textureSettings.Converter, textureSettings.ConverterArguments, filePath, imageFilePath, Log);
+                            if (imageFilePath.Length < 1)
+                                throw new IOException("Unable to find converter output file. An output file must have the same name as the input file (different extensions are ok).");
+
+                            var supportedOutputFilePaths = outputFilePaths.Where(ImageReading.IsSupported).ToArray();
+                            if (supportedOutputFilePaths.Length < 1)
+                                throw new IOException("The converter did not produce a supported file type.");
+                            else if (supportedOutputFilePaths.Length > 1)
+                                throw new IOException("The converted produced multiple supported file types. Only one output file should be created.");
+
+                            imageFilePath = supportedOutputFilePaths[0];
                         }
 
                         // Create texture from image:
@@ -585,30 +593,6 @@ namespace WadMaker
                     }
                 }
                 return data;
-            }
-        }
-
-        static void ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath)
-        {
-            var arguments = converterArguments.Replace("{input}", inputPath).Replace("{output}", outputPath).Trim();
-            Log($"Executing conversion command: '{converter} {arguments}'.");
-
-            var startInfo = new ProcessStartInfo(converter, arguments) {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-
-            using (var process = new Process { StartInfo = startInfo })
-            {
-                process.OutputDataReceived += (sender, e) => Log($"    INFO: {e.Data}");
-                process.ErrorDataReceived += (sender, e) => Log($"    ERROR: {e.Data}");
-                process.Start();
-                if (!process.WaitForExit(10_000))
-                    throw new TimeoutException("Conversion command did not finish within 10 seconds, .");
-
-                Log($"Conversion command finished with exit code: {process.ExitCode}.");
             }
         }
 

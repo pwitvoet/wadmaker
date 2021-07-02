@@ -252,7 +252,7 @@ namespace SpriteMaker
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
             var previousFileHashes = LoadFileHashesHistory(inputDirectory);
             var currentFileHashes = new Dictionary<string, byte[]>();
-            var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
+            var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
 
             Directory.CreateDirectory(outputDirectory);
 
@@ -356,6 +356,9 @@ namespace SpriteMaker
 
                 foreach (var subDirectoryPath in Directory.EnumerateDirectories(inputDirectory))
                 {
+                    if (ExternalConversion.IsConversionOutputDirectory(subDirectoryPath))
+                        continue;
+
                     var subDirectoryName = Path.GetFileName(subDirectoryPath);
                     (var added, var updated, var removed) = MakeSpritesFromImagesDirectory(
                         subDirectoryPath,
@@ -462,39 +465,45 @@ namespace SpriteMaker
                     foreach (var file in imagePathsAndSettings)
                     {
                         // Do we need to convert this image?
-                        var imageFilePath = file.path;
+                        var initialImageFilePath = file.path;
+                        var imageFilePaths = new[] { initialImageFilePath };
                         var spriteSettings = file.spriteSettings.settings;
                         if (spriteSettings.Converter != null)
                         {
                             if (spriteSettings.ConverterArguments == null)
                                 throw new InvalidDataException($"Unable to convert '{file.path}': missing converter arguments.");
 
-                            imageFilePath = Path.Combine(conversionOutputDirectory, Path.GetFileNameWithoutExtension(file.path) + ".png");
+                            initialImageFilePath = Path.Combine(conversionOutputDirectory, Path.GetFileNameWithoutExtension(file.path));
                             Directory.CreateDirectory(conversionOutputDirectory);
 
-                            ExecuteConversionCommand(
-                                spriteSettings.Converter,
-                                spriteSettings.ConverterArguments,
-                                file.path,
-                                imageFilePath);
+                            var outputFilePaths = ExternalConversion.ExecuteConversionCommand(spriteSettings.Converter, spriteSettings.ConverterArguments, file.path, initialImageFilePath, Log);
+                            if (outputFilePaths.Length < 1)
+                                throw new IOException("Unable to find converter output files. Output files must have the same name as the input file (different extensions and suffixes are ok).");
+
+                            imageFilePaths = outputFilePaths.Where(ImageReading.IsSupported).ToArray();
+                            if (imageFilePaths.Length < 1)
+                                throw new IOException("The converter did not produce any supported file types.");
                         }
 
                         // Load images (and cut up spritesheets into separate frame images):
-                        var image = ImageReading.ReadImage(imageFilePath);
-                        if (file.filenameSettings.SpritesheetTileSize is Size tileSize)
+                        foreach (var imageFilePath in imageFilePaths)
                         {
-                            if (image.Width % tileSize.Width != 0 || image.Height % tileSize.Height != 0)
-                                throw new InvalidDataException($"Spritesheet image '{file.path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
+                            var image = ImageReading.ReadImage(imageFilePath);
+                            if (file.filenameSettings.SpritesheetTileSize is Size tileSize)
+                            {
+                                if (image.Width % tileSize.Width != 0 || image.Height % tileSize.Height != 0)
+                                    throw new InvalidDataException($"Spritesheet image '{file.path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
 
-                            var tileImages = GetSpritesheetTiles(image, tileSize);
-                            foreach (var tileImage in tileImages)
-                                frameImages.Add(new FrameImage(tileImage, file.spriteSettings.settings, frameImages.Count));
+                                var tileImages = GetSpritesheetTiles(image, tileSize);
+                                foreach (var tileImage in tileImages)
+                                    frameImages.Add(new FrameImage(tileImage, file.spriteSettings.settings, frameImages.Count));
 
-                            image.Dispose();
-                        }
-                        else
-                        {
-                            frameImages.Add(new FrameImage(image, file.spriteSettings.settings, file.filenameSettings.FrameNumber ?? frameImages.Count));
+                                image.Dispose();
+                            }
+                            else
+                            {
+                                frameImages.Add(new FrameImage(image, file.spriteSettings.settings, file.filenameSettings.FrameNumber ?? frameImages.Count));
+                            }
                         }
                     }
 
@@ -564,31 +573,6 @@ namespace SpriteMaker
                 name = name.Substring(0, dotIndex);
 
             return name.ToLowerInvariant();
-        }
-
-        static void ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath)
-        {
-            var arguments = converterArguments.Replace("{input}", inputPath).Replace("{output}", outputPath).Trim();
-            Log($"Executing conversion command: '{converter} {arguments}'.");
-
-            var startInfo = new ProcessStartInfo(converter, arguments)
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-
-            using (var process = new Process { StartInfo = startInfo })
-            {
-                process.OutputDataReceived += (sender, e) => Log($"    INFO: {e.Data}");
-                process.ErrorDataReceived += (sender, e) => Log($"    ERROR: {e.Data}");
-                process.Start();
-                if (!process.WaitForExit(10_000))
-                    throw new TimeoutException("Conversion command did not finish within 10 seconds, .");
-
-                Log($"Conversion command finished with exit code: {process.ExitCode}.");
-            }
         }
 
         static Image<Rgba32>[] GetSpritesheetTiles(Image<Rgba32> spritesheet, Size tileSize)

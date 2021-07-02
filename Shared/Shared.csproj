@@ -62,6 +62,7 @@
     <Compile Include="ColorQuantization.cs" />
     <Compile Include="DisposableList.cs" />
     <Compile Include="Dithering.cs" />
+    <Compile Include="ExternalConversion.cs" />
     <Compile Include="FileFormats\IImageReader.cs" />
     <Compile Include="FileFormats\ImageReader.cs" />
     <Compile Include="FileFormats\ImageReading.cs" />
