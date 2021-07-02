@@ -186,7 +186,7 @@ namespace Shared
             public Rgba32 Min { get; }
             public Rgba32 Max { get; }
 
-            public int Volume => (Max.R - Min.R) * (Max.G - Min.G) * (Max.B - Min.B);
+            public int Volume => (Max.R - Min.R + 1) * (Max.G - Min.G + 1) * (Max.B - Min.B + 1);
 
             public ColorBoundingBox(IEnumerable<Rgba32> colors)
             {
