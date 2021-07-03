@@ -210,10 +210,12 @@ namespace SpriteMaker
             // Gather all related files and settings (for animated sprites, it's possible to use multiple frame-numbered images):
             var inputDirectory = Path.GetDirectoryName(inputPath);
             var spriteName = GetSpriteName(inputPath);
+            var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory, ignoreHistory: true);
             var imagePaths = Directory.EnumerateFiles(inputDirectory)
                 .Where(path => GetSpriteName(path) == spriteName)
+                .Where(path => ImageReading.IsSupported(path) || spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings.Converter != null)
+                .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
                 .ToArray();
-            var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory, ignoreHistory: true);
 
             var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
             try
