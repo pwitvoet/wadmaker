@@ -16,6 +16,7 @@ namespace SpriteMaker
         public SpriteTextureFormat? TextureFormat { get; set; }
         public Size? SpritesheetTileSize { get; set; }
         public int? FrameNumber { get; set; }
+        public Point? FrameOffset { get; set; }
 
 
         public static SpriteFilenameSettings FromFilename(string path)
@@ -34,6 +35,8 @@ namespace SpriteMaker
                     settings.SpritesheetTileSize = spritesheetTileSize;
                 else if (int.TryParse(segment, out var frameNumber))
                     settings.FrameNumber = frameNumber;
+                else if (TryParseFrameOffset(segment, out var frameOffset))
+                    settings.FrameOffset = frameOffset;
             }
             return settings;
         }
@@ -51,6 +54,22 @@ namespace SpriteMaker
                 size = default;
                 return false;
             }
+        }
+
+        private static bool TryParseFrameOffset(string str, out Point point)
+        {
+            if (str.StartsWith("@"))
+            {
+                var parts = str.Substring(1).Split(',');
+                if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out var x) && int.TryParse(parts[1].Trim(), out var y))
+                {
+                    point = new Point(x, y);
+                    return true;
+                }
+            }
+
+            point = default;
+            return false;
         }
     }
 }

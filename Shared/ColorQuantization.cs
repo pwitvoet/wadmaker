@@ -76,6 +76,19 @@ namespace Shared
         }
 
         /// <summary>
+        /// Returns the counts of all colors that are used in the given image frames.
+        /// Only the R, G and B channels are taken into account, alpha is ignored.
+        /// </summary>
+        public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<ImageFrame<Rgba32>> imageFrames, Func<Rgba32, bool> ignoreColor)
+        {
+            var colorHistogram = new Dictionary<Rgba32, int>();
+            foreach (var imageFrame in imageFrames)
+                UpdateColorHistogram(colorHistogram, imageFrame, ignoreColor);
+
+            return colorHistogram;
+        }
+
+        /// <summary>
         /// Adds the counts of all colors that are used in the first frame of the given image to the given color histogram.
         /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>

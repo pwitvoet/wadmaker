@@ -49,9 +49,10 @@ namespace SpriteMaker
 
 
         /// <summary>
-        /// The origin of this frame. Defaults to the center of the image.
+        /// The offset of this frame relative to the center of the image.
+        /// Defaults to (0, 0), which centers the frame at the sprite's position.
         /// </summary>
-        public Point? FrameOrigin { get; set; }
+        public Point? FrameOffset { get; set; }
 
 
         /// <summary>

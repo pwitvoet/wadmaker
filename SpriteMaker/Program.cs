@@ -82,7 +82,7 @@ namespace SpriteMaker
                     }
 
                     if (!string.IsNullOrEmpty(Path.GetExtension(settings.InputPath)))
-                        MakeSprite(settings.InputPath, settings.OutputPath);
+                        MakeSingleSprite(settings.InputPath, settings.OutputPath);
                     else
                         MakeSprites(settings.InputPath, settings.OutputPath, settings.FullRebuild, settings.IncludeSubDirectories, settings.EnableSubDirectoryRemoval);
                 }
@@ -203,7 +203,7 @@ namespace SpriteMaker
             Log($"Updated {outputDirectory} from {inputDirectory}: added {spritesAdded}, updated {spritesUpdated} and removed {spritesRemoved} sprites, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        static void MakeSprite(string inputPath, string outputPath)
+        static void MakeSingleSprite(string inputPath, string outputPath)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -414,11 +414,15 @@ namespace SpriteMaker
                     .Select(path =>
                     {
                         var isSupportedFileType = ImageReading.IsSupported(path);
-                        return (
-                            path,
-                            isSupportedFileType,
-                            filenameSettings: SpriteFilenameSettings.FromFilename(path),
-                            spriteSettings: spriteMakingSettings.GetSpriteSettings(isSupportedFileType ? spriteName : Path.GetFileName(path)));
+                        var filenameSettings = SpriteFilenameSettings.FromFilename(path);
+                        var spriteSettings = spriteMakingSettings.GetSpriteSettings(isSupportedFileType ? spriteName : Path.GetFileName(path));
+
+                        // Filename settings take priority over config files:
+                        if (filenameSettings.Type != null)          spriteSettings.settings.SpriteType = filenameSettings.Type;
+                        if (filenameSettings.TextureFormat != null) spriteSettings.settings.SpriteTextureFormat = filenameSettings.TextureFormat;
+                        if (filenameSettings.FrameOffset != null)   spriteSettings.settings.FrameOffset = filenameSettings.FrameOffset;
+
+                        return (path, isSupportedFileType, filenameSettings, spriteSettings);
                     })
                     .OrderBy(file => file.filenameSettings.FrameNumber)
                     .ToArray();
@@ -594,52 +598,7 @@ namespace SpriteMaker
 
         static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, SpriteType spriteType, SpriteTextureFormat spriteTextureFormat)
         {
-            if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
-                return CreateIndexAlphaSpriteFromImages(frameImages, spriteType);
-
-            // Create a single color histogram from all frame images:
-            var colorHistogram = new Dictionary<Rgba32, int>();
-            var isAlphaTest = spriteTextureFormat == SpriteTextureFormat.AlphaTest;
-            foreach (var frameImage in frameImages)
-            {
-                foreach (ImageFrame<Rgba32> frame in frameImage.Image.Frames)
-                    ColorQuantization.UpdateColorHistogram(colorHistogram, frame, MakeTransparencyPredicate(frameImage));
-            }
-
-            // Create a suitable palette, taking sprite texture format into account:
-            var maxColors = isAlphaTest ? 255 : 256;
-            var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
-
-            // Always make sure we've got a 256-color palette (some tools can't handle smaller palettes):
-            if (colorClusters.Length < maxColors)
-            {
-                colorClusters = colorClusters
-                    .Concat(Enumerable
-                        .Range(0, maxColors - colorClusters.Length)
-                        .Select(i => (new Rgba32(), new[] { new Rgba32() })))
-                    .ToArray();
-            }
-
-            if (isAlphaTest)
-            {
-                var colorKey = new Rgba32(0, 0, 255);
-                colorClusters = colorClusters
-                    .Append((colorKey, new[] { colorKey }))         // Slot 255: used for transparent pixels
-                    .ToArray();
-            }
-
-
-            // Create the actual palette, and a color index lookup cache:
-            var palette = colorClusters
-                .Select(cluster => cluster.averageColor)
-                .ToArray();
-            var colorIndexMappingCache = new Dictionary<Rgba32, int>();
-            for (int i = 0; i < colorClusters.Length; i++)
-            {
-                foreach (var color in colorClusters[i].colors)
-                    colorIndexMappingCache[color] = i;
-            }
-
+            (var palette, var colorIndexMappingCache) = CreatePaletteAndColorIndexMappingCache(frameImages, spriteTextureFormat);
 
             // Create the sprite and its frames:
             var spriteWidth = frameImages.Max(frameImage => frameImage.Image.Frames.OfType<ImageFrame<Rgba32>>().Max(frame => frame.Width));
@@ -654,87 +613,132 @@ namespace SpriteMaker
                 {
                     sprite.Frames.Add(new Frame {
                         Type = FrameType.Single,
-                        FrameOriginX = -(frameImage.Settings.FrameOrigin?.X ?? (frame.Width / 2)),
-                        FrameOriginY = frameImage.Settings.FrameOrigin?.Y ?? (frame.Height / 2),
+                        FrameOriginX = -(frame.Width / 2) + (frameImage.Settings.FrameOffset?.X ?? 0),
+                        FrameOriginY = (frame.Height / 2) + (frameImage.Settings.FrameOffset?.Y ?? 0),
                         FrameWidth = (uint)frame.Width,
                         FrameHeight = (uint)frame.Height,
-                        ImageData = CreateFrameImageData(frame, palette, colorIndexMappingCache, frameImage.Settings, MakeTransparencyPredicate(frameImage), disableDithering: isAnimatedSprite),
+                        ImageData = CreateFrameImageData(
+                            frame,
+                            palette,
+                            colorIndexMappingCache,
+                            spriteTextureFormat,
+                            frameImage.Settings,
+                            MakeTransparencyPredicate(frameImage, spriteTextureFormat == SpriteTextureFormat.AlphaTest),
+                            disableDithering: isAnimatedSprite),
                     });
                 }
             }
             return sprite;
-
-
-            Func<Rgba32, bool> MakeTransparencyPredicate(FrameImage frameImage)
-            {
-                var transparencyThreshold = isAlphaTest ? Clamp(frameImage.Settings.AlphaTestTransparencyThreshold ?? 128, 0, 255) : 0;
-                if (frameImage.Settings.AlphaTestTransparencyColor is Rgba32 transparencyColor)
-                    return color => color.A < transparencyThreshold || (color.R == transparencyColor.R && color.G == transparencyColor.G && color.B == transparencyColor.B);
-
-                return color => color.A < transparencyThreshold;
-            }
         }
 
-        static Sprite CreateIndexAlphaSpriteFromImages(IList<FrameImage> frameImages, SpriteType spriteType)
+        static (Rgba32[] palette, Dictionary<Rgba32, int> colorIndexMappingCache) CreatePaletteAndColorIndexMappingCache(
+            IList<FrameImage> frameImages,
+            SpriteTextureFormat spriteTextureFormat)
         {
-            Rgba32 decalColor;
-            if (frameImages.First().Settings.IndexAlphaColor is Rgba32 indexAlphaColor)
+            if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
             {
-                decalColor = indexAlphaColor;
+                Rgba32 decalColor;
+                if (frameImages.First().Settings.IndexAlphaColor is Rgba32 indexAlphaColor)
+                {
+                    decalColor = indexAlphaColor;
+                }
+                else
+                {
+                    var colorHistogram = ColorQuantization.GetColorHistogram(
+                        frameImages.SelectMany(frameImage => frameImage.Image.Frames.OfType<ImageFrame<Rgba32>>()),
+                        color => color.A == 0);
+                    decalColor = ColorQuantization.GetAverageColor(colorHistogram);
+                }
+                var palette = Enumerable.Range(0, 255)
+                    .Select(i => new Rgba32((byte)i, (byte)i, (byte)i))
+                    .Append(decalColor)
+                    .ToArray();
+
+                // NOTE: No need to map colors to palette indexes, because the index can easily be derived from the color itself
+                // //    (either the alpha channel or the average RGB channel values):
+                return (palette, new Dictionary<Rgba32, int>());
             }
             else
             {
-                var colorHistogram = ColorQuantization.GetColorHistogram(frameImages.Select(frameImage => frameImage.Image), color => color.A == 0);
-                decalColor = ColorQuantization.GetAverageColor(colorHistogram);
-            }
-            var palette = Enumerable.Range(0, 255)
-                .Select(i => new Rgba32((byte)i, (byte)i, (byte)i))
-                .Append(decalColor)
-                .ToArray();
-
-            var spriteWidth = frameImages.Max(frameImage => frameImage.Image.Width);
-            var spriteHeight = frameImages.Max(frameImage => frameImage.Image.Height);
-            var sprite = Sprite.CreateSprite(spriteType, SpriteTextureFormat.IndexAlpha, spriteWidth, spriteHeight, palette);
-            foreach (var frameImage in frameImages)
-            {
-                var mode = frameImage.Settings.IndexAlphaTransparencySource ?? IndexAlphaTransparencySource.AlphaChannel;
-                var getPaletteIndex = (mode == IndexAlphaTransparencySource.AlphaChannel) ? (Func<Rgba32, byte>)(color => color.A) :
-                                                                                            (Func<Rgba32, byte>)(color => (byte)((color.R + color.G + color.B) / 3));
-
-                var image = frameImage.Image;
-                var frame = new Frame {
-                    Type = FrameType.Single,
-                    FrameOriginX = -(frameImage.Settings.FrameOrigin?.X ?? (image.Width / 2)),
-                    FrameOriginY = frameImage.Settings.FrameOrigin?.Y ?? (image.Height / 2),
-                    FrameWidth = (uint)image.Width,
-                    FrameHeight = (uint)image.Height,
-                    ImageData = new byte[image.Width * image.Height],
-                };
-
-                for (int y = 0; y < image.Height; y++)
+                // Create a single color histogram from all frame images:
+                var colorHistogram = new Dictionary<Rgba32, int>();
+                var isAlphaTest = spriteTextureFormat == SpriteTextureFormat.AlphaTest;
+                foreach (var frameImage in frameImages)
                 {
-                    var rowSpan = image.GetPixelRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
-                    {
-                        var color = rowSpan[x];
-                        frame.ImageData[y * image.Width + x] = getPaletteIndex(color);
-                    }
+                    foreach (ImageFrame<Rgba32> frame in frameImage.Image.Frames)
+                        ColorQuantization.UpdateColorHistogram(colorHistogram, frame, MakeTransparencyPredicate(frameImage, isAlphaTest));
                 }
 
-                sprite.Frames.Add(frame);
+                // Create a suitable palette, taking sprite texture format into account:
+                var maxColors = isAlphaTest ? 255 : 256;
+                var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
+
+                // Always make sure we've got a 256-color palette (some tools can't handle smaller palettes):
+                if (colorClusters.Length < maxColors)
+                {
+                    colorClusters = colorClusters
+                        .Concat(Enumerable
+                            .Range(0, maxColors - colorClusters.Length)
+                            .Select(i => (new Rgba32(), new[] { new Rgba32() })))
+                        .ToArray();
+                }
+
+                if (isAlphaTest)
+                {
+                    var colorKey = new Rgba32(0, 0, 255);
+                    colorClusters = colorClusters
+                        .Append((colorKey, new[] { colorKey }))         // Slot 255: used for transparent pixels
+                        .ToArray();
+                }
+
+
+                // Create the actual palette, and a color index lookup cache:
+                var palette = colorClusters
+                    .Select(cluster => cluster.averageColor)
+                    .ToArray();
+                var colorIndexMappingCache = new Dictionary<Rgba32, int>();
+                for (int i = 0; i < colorClusters.Length; i++)
+                {
+                    foreach (var color in colorClusters[i].colors)
+                        colorIndexMappingCache[color] = i;
+                }
+
+                return (palette, colorIndexMappingCache);
             }
-            return sprite;
+        }
+
+        static Func<Rgba32, bool> MakeTransparencyPredicate(FrameImage frameImage, bool isAlphaTest)
+        {
+            var transparencyThreshold = isAlphaTest ? Clamp(frameImage.Settings.AlphaTestTransparencyThreshold ?? 128, 0, 255) : 0;
+            if (frameImage.Settings.AlphaTestTransparencyColor is Rgba32 transparencyColor)
+                return color => color.A < transparencyThreshold || (color.R == transparencyColor.R && color.G == transparencyColor.G && color.B == transparencyColor.B);
+
+            return color => color.A < transparencyThreshold;
         }
 
         static byte[] CreateFrameImageData(
             ImageFrame<Rgba32> imageFrame,
             Rgba32[] palette,
             IDictionary<Rgba32, int> colorIndexMappingCache,
+            SpriteTextureFormat spriteTextureFormat,
             SpriteSettings spriteSettings,
             Func<Rgba32, bool> isTransparent,
             bool disableDithering)
         {
-            var getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent);
+            Func<Rgba32, int> getColorIndex = null;
+            if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
+            {
+                disableDithering = true;
+
+                if (spriteSettings.IndexAlphaTransparencySource == IndexAlphaTransparencySource.AlphaChannel)
+                    getColorIndex = color => color.A;
+                else
+                    getColorIndex = color => (color.R + color.G + color.B) / 3;
+            }
+            else
+            {
+                getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent);
+            }
 
             var ditheringAlgorithm = spriteSettings.DitheringAlgorithm ?? (disableDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             switch (ditheringAlgorithm)

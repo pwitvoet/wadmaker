@@ -22,7 +22,7 @@ namespace SpriteMaker
     {
         const string SpriteTypeKey = "type";
         const string SpriteTextureFormatKey = "texture-format";
-        const string FrameOriginKey = "frame-origin";
+        const string FrameOffsetKey = "frame-offset";
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
         const string AlphaTestTransparencyThresholdKey = "transparency-threshold";
@@ -71,7 +71,7 @@ namespace SpriteMaker
                     // More specific rules override settings defined by less specific rules:
                     if (ruleSettings.SpriteType != null) spriteSettings.SpriteType = ruleSettings.SpriteType;
                     if (ruleSettings.SpriteTextureFormat != null) spriteSettings.SpriteTextureFormat = ruleSettings.SpriteTextureFormat;
-                    if (ruleSettings.FrameOrigin != null) spriteSettings.FrameOrigin = ruleSettings.FrameOrigin;
+                    if (ruleSettings.FrameOffset != null) spriteSettings.FrameOffset = ruleSettings.FrameOffset;
                     if (ruleSettings.DitheringAlgorithm != null) spriteSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
                     if (ruleSettings.DitherScale != null) spriteSettings.DitherScale = ruleSettings.DitherScale;
                     if (ruleSettings.AlphaTestTransparencyThreshold != null) spriteSettings.AlphaTestTransparencyThreshold = ruleSettings.AlphaTestTransparencyThreshold;
@@ -270,9 +270,9 @@ namespace SpriteMaker
                         spriteSettings.SpriteTextureFormat = ParseToken(ParseSpriteTextureFormat, "sprite texture format");
                         break;
 
-                    case FrameOriginKey:
+                    case FrameOffsetKey:
                         RequireToken(":");
-                        spriteSettings.FrameOrigin = new Point(ParseToken(int.Parse), ParseToken(int.Parse));
+                        spriteSettings.FrameOffset = new Point(ParseToken(int.Parse), ParseToken(int.Parse));
                         break;
 
                     case DitheringAlgorithmKey:
@@ -445,7 +445,7 @@ namespace SpriteMaker
 
                         if (settings.SpriteType != null) writer.Write($" {SpriteTypeKey}: {Serialize(settings.SpriteType.Value)}");
                         if (settings.SpriteTextureFormat != null) writer.Write($" {SpriteTextureFormatKey}: {Serialize(settings.SpriteTextureFormat.Value)}");
-                        if (settings.FrameOrigin != null) writer.Write($" {FrameOriginKey}: {settings.FrameOrigin.Value.X} {settings.FrameOrigin.Value.Y}");
+                        if (settings.FrameOffset != null) writer.Write($" {FrameOffsetKey}: {settings.FrameOffset.Value.X} {settings.FrameOffset.Value.Y}");
                         if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringAlgorithmKey}: {Serialize(settings.DitheringAlgorithm.Value)}");
                         if (settings.DitherScale != null) writer.Write($" {DitherScaleKey}: {settings.DitherScale.Value}");
                         if (settings.AlphaTestTransparencyThreshold != null) writer.Write($" {AlphaTestTransparencyThresholdKey}: {settings.AlphaTestTransparencyThreshold.Value}");
