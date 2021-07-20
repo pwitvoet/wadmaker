@@ -547,6 +547,19 @@ namespace SpriteMaker
             }
         }
 
+        public static string GetSpriteTypeShorthand(SpriteType type)
+        {
+            switch (type)
+            {
+                case SpriteType.ParallelUpright: return "pu";
+                case SpriteType.Upright: return "u";
+                default:
+                case SpriteType.Parallel: return "p";
+                case SpriteType.Oriented: return "o";
+                case SpriteType.ParallelOriented: return "po";
+            }
+        }
+
         public static bool TryParseSpriteTextureFormat(string str, out SpriteTextureFormat textureFormat)
         {
             switch (str.ToLowerInvariant())
@@ -574,6 +587,18 @@ namespace SpriteMaker
                 default:
                     textureFormat = default;
                     return false;
+            }
+        }
+
+        public static string GetSpriteTextureFormatShorthand(SpriteTextureFormat textureFormat)
+        {
+            switch (textureFormat)
+            {
+                case SpriteTextureFormat.Normal: return "n";
+                default:
+                case SpriteTextureFormat.Additive: return "a";
+                case SpriteTextureFormat.IndexAlpha: return "ia";
+                case SpriteTextureFormat.AlphaTest: return "at";
             }
         }
     }

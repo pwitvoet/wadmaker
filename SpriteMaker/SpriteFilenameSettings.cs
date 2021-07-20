@@ -2,6 +2,7 @@
 using SixLabors.ImageSharp;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace SpriteMaker
 {
@@ -18,6 +19,25 @@ namespace SpriteMaker
         public int? FrameNumber { get; set; }
         public Point? FrameOffset { get; set; }
 
+
+        public string InsertIntoFilename(string path)
+        {
+            var extension = Path.GetExtension(path);
+            var sb = new StringBuilder();
+
+            if (Type != null && Type != SpriteType.Parallel)
+                sb.Append($".{SpriteMakingSettings.GetSpriteTypeShorthand(Type.Value)}");
+            if (TextureFormat != null && TextureFormat != SpriteTextureFormat.Additive)
+                sb.Append($".{SpriteMakingSettings.GetSpriteTextureFormatShorthand(TextureFormat.Value)}");
+            if (SpritesheetTileSize != null)
+                sb.Append($".{SpritesheetTileSize.Value.Width}x{SpritesheetTileSize.Value.Height}");
+            if (FrameNumber != null)
+                sb.Append($".{FrameNumber.Value}");
+            if (FrameOffset != null)
+                sb.Append($".@{FrameOffset.Value.X},{FrameOffset.Value.Y}");
+
+            return Path.ChangeExtension(path, sb.ToString() + extension);
+        }
 
         public static SpriteFilenameSettings FromFilename(string path)
         {

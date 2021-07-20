@@ -51,6 +51,7 @@ namespace SpriteMaker
         /// <summary>
         /// The offset of this frame relative to the center of the image.
         /// Defaults to (0, 0), which centers the frame at the sprite's position.
+        /// Positive X values move the frame to the right, positive Y values move the frame upwards.
         /// </summary>
         public Point? FrameOffset { get; set; }
 
