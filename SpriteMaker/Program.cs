@@ -481,6 +481,8 @@ namespace SpriteMaker
                 return false;
             }
 
+            // NOTE: Support for custom frame offsets is limited when extracting as gif, for the same reasons as with spritesheets.
+
             Log($"  Creating image file '{gifOutputPath}'.");
             using (var image = new Image<Rgba32>((int)sprite.MaximumWidth, (int)sprite.MaximumHeight))
             {
@@ -1069,10 +1071,10 @@ namespace SpriteMaker
             {
                 disableDithering = true;
 
-                if (spriteSettings.IndexAlphaTransparencySource == IndexAlphaTransparencySource.AlphaChannel)
-                    getColorIndex = color => color.A;
-                else
+                if (spriteSettings.IndexAlphaTransparencySource == IndexAlphaTransparencySource.Grayscale)
                     getColorIndex = color => (color.R + color.G + color.B) / 3;
+                else
+                    getColorIndex = color => color.A;
             }
             else
             {
