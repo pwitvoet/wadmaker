@@ -73,6 +73,14 @@ namespace SpriteMaker
                 Log($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
 
                 var settings = ParseArguments(args);
+                if (!settings.DisableFileLogging)
+                {
+                    var logName = Path.GetFileNameWithoutExtension(settings.InputPath);
+                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputPath), $"spritemaker - {logName}.log");
+                    LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
+                    LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                }
+
                 if (settings.Extract)
                 {
                     var extractionFormat = settings.ExtractAsSpriteSheet ? ExtractionFormat.Spritesheet :
@@ -86,17 +94,6 @@ namespace SpriteMaker
                 }
                 else
                 {
-                    if (!settings.DisableFileLogging)
-                    {
-                        // For directories, use specific log files, but for individual image-to-sprite conversion, reuse a single log file to reduce clutter:
-                        var isInputDirectory = Directory.Exists(settings.InputPath);
-                        var logFilePath = Path.Combine(
-                            Path.GetDirectoryName(settings.InputPath),
-                            isInputDirectory ? $"spritemaker - {Path.GetFileName(settings.InputPath)}.log" : "spritemaker.log");
-                        LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
-                        LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
-                    }
-
                     if (!string.IsNullOrEmpty(Path.GetExtension(settings.InputPath)))
                         MakeSingleSprite(settings.InputPath, settings.OutputPath);
                     else

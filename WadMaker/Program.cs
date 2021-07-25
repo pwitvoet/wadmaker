@@ -50,6 +50,14 @@ namespace WadMaker
                 Log($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
 
                 var settings = ParseArguments(args);
+                if (!settings.DisableFileLogging)
+                {
+                    var logName = Path.GetFileNameWithoutExtension(settings.InputDirectory ?? settings.InputFilePath);
+                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), $"wadmaker - {logName}.log");
+                    LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
+                    LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                }
+
                 if (settings.Extract)
                 {
                     ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles);
@@ -60,12 +68,6 @@ namespace WadMaker
                 }
                 else
                 {
-                    if (!settings.DisableFileLogging)
-                    {
-                        var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), $"wadmaker - {Path.GetFileName(settings.InputDirectory)}.log");
-                        LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
-                        LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
-                    }
                     MakeWad(settings.InputDirectory, settings.InputFilePath, settings.FullRebuild, settings.IncludeSubDirectories);
                 }
             }
