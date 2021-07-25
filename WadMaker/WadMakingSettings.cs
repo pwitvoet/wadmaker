@@ -9,29 +9,16 @@ using System.Text.RegularExpressions;
 namespace WadMaker
 {
     /// <summary>
-    /// <para>
     /// A collection of texture settings rules, coming from a 'wadmaker.config' file.
-    /// 
+    /// <para>
     /// Rules are put on separate lines, starting with a filename (which can include wildcards: *) and followed by one or more texture settings.
     /// Empty lines and lines starting with // are ignored. When multiple rules match a filename, settings defined in more specific rules will take priority.
     /// </para>
     /// </summary>
     class WadMakingSettings
     {
-        const string DitheringAlgorithmKey = "dithering";
-        const string DitherScaleKey = "dither-scale";
-        const string TransparencyThresholdKey = "transparency-threshold";
-        const string TransparencyColorKey = "transparency-color";
-        const string WaterFogColorKey = "water-fog";
-        const string DecalTransparencyKey = "decal-transparency";
-        const string DecalColorKey = "decal-color";
-        const string ConverterKey = "converter";
-        const string ConverterArgumentsKey = "arguments";
-        const string TimestampKey = "timestamp";
-        const string RemovedKey = "removed";
-
         const string ConfigFilename = "wadmaker.config";
-        const string TimestampFilename = "wadmaker.dat";
+        const string HistoryFilename = "wadmaker.dat";
 
 
         class Rule
@@ -135,13 +122,13 @@ namespace WadMaker
         public static WadMakingSettings Load(string folder)
         {
             var configFilePath = Path.Combine(folder, ConfigFilename);
-            var timestampFilePath = Path.Combine(folder, TimestampFilename);
+            var historyFilePath = Path.Combine(folder, HistoryFilename);
 
-            // First read the timestamps file, which stores the last known state and modification time of each rule:
+            // First read the history file, which stores the last known state and modification time of each rule:
             var oldRules = new Dictionary<string, Rule>();
-            if (File.Exists(timestampFilePath))
+            if (File.Exists(historyFilePath))
             {
-                foreach (var line in File.ReadAllLines(timestampFilePath))
+                foreach (var line in File.ReadAllLines(historyFilePath))
                 {
                     var rule = ParseRuleLine(line, DateTimeOffset.FromUnixTimeMilliseconds(0), true);
                     if (rule != null)
@@ -196,7 +183,7 @@ namespace WadMaker
             }
 
             // Now save this back to wadmaker.dat:
-            SaveTimestampedRules(timestampFilePath, oldRules);
+            SaveTimestampedRules(historyFilePath, oldRules);
 
             // Finally, return the new rules, which are now properly timestamped:
             return new WadMakingSettings(newRules.Values);
@@ -205,8 +192,23 @@ namespace WadMaker
         public static bool IsConfigurationFile(string path)
         {
             var filename = Path.GetFileName(path);
-            return filename == ConfigFilename || filename == TimestampFilename;
+            return filename == ConfigFilename || filename == HistoryFilename;
         }
+
+
+        #region Parsing/serialization
+
+        const string DitheringAlgorithmKey = "dithering";
+        const string DitherScaleKey = "dither-scale";
+        const string TransparencyThresholdKey = "transparency-threshold";
+        const string TransparencyColorKey = "transparency-color";
+        const string WaterFogColorKey = "water-fog";
+        const string DecalTransparencyKey = "decal-transparency";
+        const string DecalColorKey = "decal-color";
+        const string ConverterKey = "converter";
+        const string ConverterArgumentsKey = "arguments";
+        const string TimestampKey = "timestamp";
+        const string RemovedKey = "removed";
 
 
         private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
@@ -448,5 +450,7 @@ namespace WadMaker
         }
 
         private static string Serialize(Rgba32 color, bool includeAplha = true) => $"{color.R} {color.G} {color.B}" + (includeAplha ? $" {color.A}" : "");
+
+        #endregion
     }
 }

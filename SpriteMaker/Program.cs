@@ -248,7 +248,7 @@ namespace SpriteMaker
             // Gather all related files and settings (for animated sprites, it's possible to use multiple frame-numbered images):
             var inputDirectory = Path.GetDirectoryName(inputPath);
             var spriteName = GetSpriteName(inputPath);
-            var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory, ignoreHistory: true);
+            var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
             var imagePaths = Directory.EnumerateFiles(inputDirectory)
                 .Where(path => GetSpriteName(path) == spriteName)
                 .Where(path => ImageReading.IsSupported(path) || spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings.Converter != null)
@@ -590,7 +590,6 @@ namespace SpriteMaker
             var spritesRemoved = 0;
 
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
-            var previousFileHashes = LoadFileHashesHistory(inputDirectory);
             var currentFileHashes = new Dictionary<string, byte[]>();
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
 
@@ -620,7 +619,6 @@ namespace SpriteMaker
                         spriteMakingSettings,
                         conversionOutputDirectory,
                         fullRebuild,
-                        previousFileHashes,
                         currentFileHashes);
 
                     if (success)
@@ -640,7 +638,7 @@ namespace SpriteMaker
                 }
 
                 // Remove sprites whose source images have been removed:
-                var oldSpriteNames = previousFileHashes
+                var oldSpriteNames = spriteMakingSettings.FileHashesHistory
                     .Select(kv => GetSpriteName(kv.Key))
                     .ToHashSet();
                 var newSpriteNames = spriteImagePaths
@@ -666,14 +664,6 @@ namespace SpriteMaker
                         }
                     }
                 }
-
-                // Store the most recent hash for each input image, and remember files that have been removed:
-                foreach (var filename in previousFileHashes.Keys)
-                {
-                    if (!currentFileHashes.ContainsKey(filename))
-                        currentFileHashes[filename] = null;
-                }
-                SaveFileHashesHistory(inputDirectory, currentFileHashes);
             }
             finally
             {
@@ -689,11 +679,9 @@ namespace SpriteMaker
             }
 
             // Handle sub-directories (recursively):
+            var currentSubDirectoryNames = new HashSet<string>();
             if (includeSubDirectories)
             {
-                var previousSubDirectoryNames = LoadSubDirectoriesHistory(inputDirectory);
-                var currentSubDirectoryNames = new HashSet<string>();
-
                 foreach (var subDirectoryPath in Directory.EnumerateDirectories(inputDirectory))
                 {
                     if (ExternalConversion.IsConversionOutputDirectory(subDirectoryPath))
@@ -716,16 +704,16 @@ namespace SpriteMaker
                 if (enableSubDirectoryRemoving)
                 {
                     // Remove output sprites for sub-directories that have been removed:
-                    foreach (var subDirectoryName in previousSubDirectoryNames)
+                    foreach (var subDirectoryName in spriteMakingSettings.SubDirectoryNamesHistory)
                     {
                         // Remove all sprites from the associated output directory, and the directory itself as well if it's empty:
                         if (!currentSubDirectoryNames.Contains(subDirectoryName))
                             spritesRemoved += RemoveOutputSprites(Path.Combine(outputDirectory, subDirectoryName));
                     }
                 }
-
-                SaveSubDirectoriesHistory(inputDirectory, previousSubDirectoryNames.Union(currentSubDirectoryNames));
             }
+
+            spriteMakingSettings.UpdateHistory(currentFileHashes, currentSubDirectoryNames);
 
             return (spritesAdded, spritesUpdated, spritesRemoved);
         }
@@ -743,7 +731,6 @@ namespace SpriteMaker
             SpriteMakingSettings spriteMakingSettings,
             string conversionOutputDirectory,
             bool forceRebuild,
-            IDictionary<string, byte[]> previousFileHashes = null,
             IDictionary<string, byte[]> currentFileHashes = null)
         {
             try
@@ -777,7 +764,7 @@ namespace SpriteMaker
                 }
 
                 // Read file hashes - these are used to detect filename changes, and will be stored for future change detection:
-                if (currentFileHashes != null && previousFileHashes != null)
+                if (currentFileHashes != null)
                 {
                     var imageFileHashes = imagePaths.ToDictionary(Path.GetFileName, GetFileHash);
                     foreach (var kv in imageFileHashes)
@@ -794,7 +781,7 @@ namespace SpriteMaker
                             // Have any settings been updated? Have any source images been updated? Have any frame images been swapped or has any file been renamed?
                             if (!imagePathsAndSettings.Any(file => file.spriteSettings.lastUpdate > lastSpriteUpdateTime) &&
                                 !imagePathsAndSettings.Any(file => new FileInfo(file.path).LastWriteTimeUtc > lastSpriteUpdateTime) &&
-                                imageFileHashes.All(kv => previousFileHashes.TryGetValue(kv.Key, out var oldHash) && IsEqualHash(oldHash, kv.Value)))
+                                imageFileHashes.All(kv => spriteMakingSettings.FileHashesHistory.TryGetValue(kv.Key, out var oldHash) && IsEqualHash(oldHash, kv.Value)))
                             {
                                 // No changes detected, this sprite doesn't need to be rebuilt:
                                 return false;
@@ -1107,34 +1094,6 @@ namespace SpriteMaker
         }
 
 
-        /// <summary>
-        /// SpriteMaker stores the hash of each source image file.
-        /// This enables it to detect filename changes (which cannot be detected by looking at the last modification date).
-        /// The names of removed files are also remembered, so only the sprites that were created from those images will be removed,
-        /// (otherwise removing sprites could be a very destructive operation, if the output directory already contains other sprites!).
-        /// </summary>
-        static IDictionary<string, byte[]> LoadFileHashesHistory(string directory)
-        {
-            var path = GetFileHashesFilePath(directory);
-            if (!File.Exists(path))
-                return new Dictionary<string, byte[]>();
-
-            return File.ReadAllLines(path)
-                .Select(line => line.Split())
-                .ToDictionary(
-                    parts => HttpUtility.UrlDecode(parts[0]),
-                    parts => (parts.Length < 2) ? null : ParseHex(parts[1]));
-        }
-
-        static void SaveFileHashesHistory(string directory, IDictionary<string, byte[]> fileHashes)
-        {
-            File.WriteAllLines(
-                GetFileHashesFilePath(directory),
-                fileHashes.Select(kv => HttpUtility.UrlEncode(kv.Key) + ((kv.Value == null) ? "" : " " + string.Join("", kv.Value.Select(b => b.ToString("x2"))))));
-        }
-
-        static string GetFileHashesFilePath(string directory) => Path.Combine(directory, "filehashes.dat");
-
         static byte[] GetFileHash(string path)
         {
             using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -1144,43 +1103,8 @@ namespace SpriteMaker
 
         static bool IsEqualHash(byte[] hash1, byte[] hash2) => hash1 != null && hash2 != null && Enumerable.SequenceEqual(hash1, hash2);
 
-
-        static HashSet<string> LoadSubDirectoriesHistory(string directory)
-        {
-            var path = GetSubDirectoriesFilePath(directory);
-            if (!File.Exists(path))
-                return new HashSet<string>();
-
-            return File.ReadAllLines(path)
-                .Select(HttpUtility.UrlDecode)
-                .ToHashSet();
-        }
-
-        static void SaveSubDirectoriesHistory(string directory, IEnumerable<string> directoryNames)
-        {
-            File.WriteAllLines(
-                GetSubDirectoriesFilePath(directory),
-                directoryNames
-                    .Distinct()
-                    .Select(HttpUtility.UrlEncode));
-        }
-
-        static string GetSubDirectoriesFilePath(string directory) => Path.Combine(directory, "subdirectories.dat");
-
-
         // TODO: Move this to a common place in Shared -- it's duplicated 3 times now!
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
-
-        static byte[] ParseHex(string hexString)
-        {
-            if (hexString.Length % 2 != 0) throw new InvalidDataException("Hex-string must contain an even number of hexadecimal digits.");
-
-            var bytes = new byte[hexString.Length / 2];
-            for (int i = 0; i < hexString.Length; i += 2)
-                bytes[i / 2] = byte.Parse(hexString.Substring(i, 2), NumberStyles.HexNumber);
-
-            return bytes;
-        }
 
 
         static void Log(string message)

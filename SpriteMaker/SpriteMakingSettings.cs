@@ -4,38 +4,25 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Web;
 
 namespace SpriteMaker
 {
     /// <summary>
-    /// <para>
     /// A collection of sprite settings rules, coming from a 'spritemaker.config' file.
-    /// 
+    /// <para>
     /// Rules are put on separate lines, starting with a filename (which can include wildcards: *) and followed by one or more sprite settings.
     /// Empty lines and lines starting with // are ignored. When multiple rules match a filename, settings defined in more specific rules will take priority.
     /// </para>
     /// </summary>
     class SpriteMakingSettings
     {
-        const string SpriteTypeKey = "type";
-        const string SpriteTextureFormatKey = "texture-format";
-        const string FrameOffsetKey = "frame-offset";
-        const string DitheringAlgorithmKey = "dithering";
-        const string DitherScaleKey = "dither-scale";
-        const string AlphaTestTransparencyThresholdKey = "transparency-threshold";
-        const string AlphaTestTransparencyColorKey = "transparency-color";
-        const string IndexAlphaTransparencySourceKey = "transparency-input";
-        const string IndexAlphaColorKey = "color";
-        const string ConverterKey = "converter";
-        const string ConverterArgumentsKey = "arguments";
-        const string TimestampKey = "timestamp";
-        const string RemovedKey = "removed";
-
         const string ConfigFilename = "spritemaker.config";
-        const string TimestampFilename = "spritemaker.dat";
+        const string HistoryFilename = "spritemaker.dat";
 
 
         class Rule
@@ -53,8 +40,14 @@ namespace SpriteMaker
         }
 
 
+        public string Directory { get; }
+        public IReadOnlyDictionary<string, byte[]> FileHashesHistory { get; }
+        public IReadOnlyCollection<string> SubDirectoryNamesHistory { get; }
+
         private Dictionary<string, Rule> _exactRules = new Dictionary<string, Rule>();
         private List<(Regex, Rule)> _wildcardRules = new List<(Regex, Rule)>();
+        private Dictionary<string, Rule> _rulesHistory;
+
 
         /// <summary>
         /// Returns sprite settings for the given filename, and the time when those settings were last modified.
@@ -88,6 +81,28 @@ namespace SpriteMaker
             return (spriteSettings, timestamp);
         }
 
+        /// <summary>
+        /// Updates the history file (spritemaker.dat), which stores a condensed history of the spritemaker.config settings, previously seen files and content hashes,
+        /// and previously seen sub-directories. This enables SpriteMaker to detect settings, filename and sub-directory changes, allowing it to only update sprites
+        /// whose input files or settings have been modified, and to only remove files and sub-directories that have previously been created by SpriteMaker.
+        /// </summary>
+        public void UpdateHistory(IDictionary<string, byte[]> currentFileHashes, HashSet<string> currentSubDirectoryNames)
+        {
+            var historyFilePath = Path.Combine(Directory, HistoryFilename);
+
+            var allFileHashes = currentFileHashes.ToDictionary(kv => kv.Key, kv => kv.Value);
+            foreach (var filename in FileHashesHistory.Keys)
+            {
+                if (!allFileHashes.ContainsKey(filename))
+                    allFileHashes[filename] = null;
+            }
+
+            var allSubDirectoryNames = SubDirectoryNamesHistory.Union(currentSubDirectoryNames).ToHashSet();
+
+            SaveHistoryFile(historyFilePath, _rulesHistory, allFileHashes, allSubDirectoryNames);
+        }
+
+
         // Returns all rules that match the given filename, from least to most specific.
         private IEnumerable<Rule> GetMatchingRules(string filename)
         {
@@ -102,9 +117,19 @@ namespace SpriteMaker
         }
 
 
-        private SpriteMakingSettings(IEnumerable<Rule> rules)
+        private SpriteMakingSettings(
+            string directory,
+            IEnumerable<Rule> currentRules,
+            IDictionary<string, Rule> rulesHistory,
+            IDictionary<string, byte[]> fileHashesHistory,
+            HashSet<string> subDirectoryNamesHistory)
         {
-            foreach (var rule in rules)
+            Directory = directory;
+            FileHashesHistory = fileHashesHistory.ToDictionary(kv => kv.Key, kv => kv.Value);
+            SubDirectoryNamesHistory = subDirectoryNamesHistory.ToHashSet();
+
+            _rulesHistory = rulesHistory.ToDictionary(kv => kv.Key, kv => kv.Value);
+            foreach (var rule in currentRules)
             {
                 if (rule.NamePattern.Contains("*"))
                     _wildcardRules.Add((MakeNamePatternRegex(rule.NamePattern), rule));
@@ -135,25 +160,21 @@ namespace SpriteMaker
 
         /// <summary>
         /// Reads sprite settings from the spritemaker.config file in the given folder, if it exists.
-        /// If <paramref name="ignoreHistory"/> is true then this also reads and updates spritemaker.dat,
+        /// If <paramref name="updateHistory"/> is true then this also reads and updates spritemaker.dat,
         /// for tracking last-modified times for each individual rule, so only sprites that are affected by a modified rule will be rebuilt.
         /// </summary>
-        public static SpriteMakingSettings Load(string folder, bool ignoreHistory = false)
+        public static SpriteMakingSettings Load(string directory)
         {
-            var configFilePath = Path.Combine(folder, ConfigFilename);
-            var timestampFilePath = Path.Combine(folder, TimestampFilename);
+            var configFilePath = Path.Combine(directory, ConfigFilename);
+            var historyFilePath = Path.Combine(directory, HistoryFilename);
 
-            // First read the timestamps file, which stores the last known state and modification time of each rule:
+            // First read the history file, which stores the last known state and modification time of each rule,
+            // as well as the names and hashes of previously converted files, and the names of previous sub-directories:
             var oldRules = new Dictionary<string, Rule>();
-            if (!ignoreHistory && File.Exists(timestampFilePath))
-            {
-                foreach (var line in File.ReadAllLines(timestampFilePath))
-                {
-                    var rule = ParseRuleLine(line, DateTimeOffset.FromUnixTimeMilliseconds(0), true);
-                    if (rule != null)
-                        oldRules[rule.NamePattern] = rule;
-                }
-            }
+            var previousFileHashes = new Dictionary<string, byte[]>();
+            var previousSubDirectoryNames = new HashSet<string>();
+            if (File.Exists(historyFilePath))
+                (oldRules, previousFileHashes, previousSubDirectoryNames) = ParseHistoryFile(historyFilePath);
 
             // Then read the current rules (spritemaker.config):
             var newRules = new Dictionary<string, Rule>();
@@ -201,22 +222,184 @@ namespace SpriteMaker
                 newRules[namePattern] = removedRule;
             }
 
-            // Now save this back to spritemaker.dat:
-            if (!ignoreHistory)
-            {
-                SaveTimestampedRules(timestampFilePath, oldRules);
-            }
-
             // Finally, return the new rules, which are now properly timestamped:
-            return new SpriteMakingSettings(newRules.Values);
+            return new SpriteMakingSettings(directory, newRules.Values, oldRules, previousFileHashes, previousSubDirectoryNames);
         }
 
         public static bool IsConfigurationFile(string path)
         {
             var filename = Path.GetFileName(path);
-            return filename == ConfigFilename || filename == TimestampFilename;
+            return filename == ConfigFilename || filename == HistoryFilename;
         }
 
+
+        #region Parsing/serialization
+
+        public static bool TryParseSpriteType(string str, out SpriteType type)
+        {
+            switch (str.ToLowerInvariant())
+            {
+                case "pu":
+                case "parallel-upright":
+                    type = SpriteType.ParallelUpright;
+                    return true;
+
+                case "u":
+                case "upright":
+                    type = SpriteType.Upright;
+                    return true;
+
+                case "p":
+                case "parallel":
+                    type = SpriteType.Parallel;
+                    return true;
+
+                case "o":
+                case "oriented":
+                    type = SpriteType.Oriented;
+                    return true;
+
+                case "po":
+                case "parallel-oriented":
+                    type = SpriteType.ParallelOriented;
+                    return true;
+
+                default:
+                    type = default;
+                    return false;
+            }
+        }
+
+        public static string GetSpriteTypeShorthand(SpriteType type)
+        {
+            switch (type)
+            {
+                case SpriteType.ParallelUpright: return "pu";
+                case SpriteType.Upright: return "u";
+                default:
+                case SpriteType.Parallel: return "p";
+                case SpriteType.Oriented: return "o";
+                case SpriteType.ParallelOriented: return "po";
+            }
+        }
+
+        public static bool TryParseSpriteTextureFormat(string str, out SpriteTextureFormat textureFormat)
+        {
+            switch (str.ToLowerInvariant())
+            {
+                case "n":
+                case "normal":
+                    textureFormat = SpriteTextureFormat.Normal;
+                    return true;
+
+                case "a":
+                case "additive":
+                    textureFormat = SpriteTextureFormat.Additive;
+                    return true;
+
+                case "ia":
+                case "index-alpha":
+                    textureFormat = SpriteTextureFormat.IndexAlpha;
+                    return true;
+
+                case "at":
+                case "alpha-test":
+                    textureFormat = SpriteTextureFormat.AlphaTest;
+                    return true;
+
+                default:
+                    textureFormat = default;
+                    return false;
+            }
+        }
+
+        public static string GetSpriteTextureFormatShorthand(SpriteTextureFormat textureFormat)
+        {
+            switch (textureFormat)
+            {
+                case SpriteTextureFormat.Normal: return "n";
+                default:
+                case SpriteTextureFormat.Additive: return "a";
+                case SpriteTextureFormat.IndexAlpha: return "ia";
+                case SpriteTextureFormat.AlphaTest: return "at";
+            }
+        }
+
+
+        const string SpriteTypeKey = "type";
+        const string SpriteTextureFormatKey = "texture-format";
+        const string FrameOffsetKey = "frame-offset";
+        const string DitheringAlgorithmKey = "dithering";
+        const string DitherScaleKey = "dither-scale";
+        const string AlphaTestTransparencyThresholdKey = "transparency-threshold";
+        const string AlphaTestTransparencyColorKey = "transparency-color";
+        const string IndexAlphaTransparencySourceKey = "transparency-input";
+        const string IndexAlphaColorKey = "color";
+        const string ConverterKey = "converter";
+        const string ConverterArgumentsKey = "arguments";
+        const string TimestampKey = "timestamp";
+        const string RemovedKey = "removed";
+
+
+        const string TimestampsSegmentHeader = "RULE TIMESTAMPS:";
+        const string FileHashesSegmentHeader = "FILE HASHES:";
+        const string SubDirectoriesSegmentHeader = "SUB DIRECTORIES:";
+
+        enum HistoryFileSegment
+        {
+            None,
+            RuleTimestamps,
+            FileHashes,
+            SubDirectories,
+        }
+
+        private static (Dictionary<string, Rule> oldRules, Dictionary<string, byte[]> oldFileHashes, HashSet<string> oldSubDirectories) ParseHistoryFile(string path)
+        {
+            var oldRules = new Dictionary<string, Rule>();
+            var oldFileHashes = new Dictionary<string, byte[]>();
+            var oldSubDirectories = new HashSet<string>();
+
+            var lines = File.ReadAllLines(path);
+            var segment = HistoryFileSegment.None;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim();
+                if (line.StartsWith(@"\\"))
+                    continue;
+
+                switch (line)
+                {
+                    case TimestampsSegmentHeader: segment = HistoryFileSegment.RuleTimestamps; break;
+                    case FileHashesSegmentHeader: segment = HistoryFileSegment.FileHashes; break;
+                    case SubDirectoriesSegmentHeader: segment = HistoryFileSegment.SubDirectories; break;
+                    default:
+                    {
+                        switch (segment)
+                        {
+                            case HistoryFileSegment.RuleTimestamps:
+                                var rule = ParseRuleLine(line, DateTimeOffset.FromUnixTimeMilliseconds(0), internalFormat: true);
+                                if (rule != null)
+                                    oldRules[rule.NamePattern] = rule;
+                                break;
+
+                            case HistoryFileSegment.FileHashes:
+                                var parts = line.Split();
+                                var filename = HttpUtility.UrlDecode(parts[0]);
+                                var hash = (parts.Length < 2) ? null : ParseHex(parts[1]);
+                                oldFileHashes[filename] = hash;
+                                break;
+
+                            case HistoryFileSegment.SubDirectories:
+                                oldSubDirectories.Add(HttpUtility.UrlDecode(line));
+                                break;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            return (oldRules, oldFileHashes, oldSubDirectories);
+        }
 
         private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
         {
@@ -429,14 +612,26 @@ namespace SpriteMaker
             }
         }
 
+        private static byte[] ParseHex(string hexString)
+        {
+            if (hexString.Length % 2 != 0) throw new InvalidDataException("Hex-string must contain an even number of hexadecimal digits.");
 
-        private static void SaveTimestampedRules(string path, Dictionary<string, Rule> timestampedRules)
+            var bytes = new byte[hexString.Length / 2];
+            for (int i = 0; i < hexString.Length; i += 2)
+                bytes[i / 2] = byte.Parse(hexString.Substring(i, 2), NumberStyles.HexNumber);
+
+            return bytes;
+        }
+
+
+        private static void SaveHistoryFile(string path, Dictionary<string, Rule> oldRules, IDictionary<string, byte[]> oldFileHashes, HashSet<string> oldSubDirectoryNames)
         {
             using (var file = File.Create(path))
             using (var writer = new StreamWriter(file))
             {
-                writer.WriteLine("// This file is generated by SpriteMaker and is used to keep track of when rules are last modified, so only affected sprites will be rebuilt.");
-                foreach (var rule in timestampedRules.Values)
+                writer.WriteLine("// This file is generated by SpriteMaker and is used to keep track of when rules, files and sub-directories are last modified, so only affected sprites will be rebuilt.");
+                writer.WriteLine(TimestampsSegmentHeader);
+                foreach (var rule in oldRules.Values)
                 {
                     writer.Write(rule.NamePattern);
                     if (rule.SpriteSettings != null)
@@ -461,6 +656,14 @@ namespace SpriteMaker
                     }
                     writer.WriteLine($" {TimestampKey}: {rule.LastModified.ToUnixTimeMilliseconds()}");
                 }
+
+                writer.WriteLine(FileHashesSegmentHeader);
+                foreach (var filenameAndHash in oldFileHashes)
+                    writer.WriteLine(HttpUtility.UrlEncode(filenameAndHash.Key) + ((filenameAndHash.Value == null) ? "" : " " + string.Join("", filenameAndHash.Value.Select(b => b.ToString("x2")))));
+
+                writer.WriteLine(SubDirectoriesSegmentHeader);
+                foreach (var subDirectoryName in oldSubDirectoryNames)
+                    writer.WriteLine(HttpUtility.UrlEncode(subDirectoryName));
             }
         }
 
@@ -511,95 +714,6 @@ namespace SpriteMaker
 
         private static string Serialize(Rgba32 color, bool includeAplha = true) => $"{color.R} {color.G} {color.B}" + (includeAplha ? $" {color.A}" : "");
 
-
-        public static bool TryParseSpriteType(string str, out SpriteType type)
-        {
-            switch (str.ToLowerInvariant())
-            {
-                case "pu":
-                case "parallel-upright":
-                    type = SpriteType.ParallelUpright;
-                    return true;
-
-                case "u":
-                case "upright":
-                    type = SpriteType.Upright;
-                    return true;
-
-                case "p":
-                case "parallel":
-                    type = SpriteType.Parallel;
-                    return true;
-
-                case "o":
-                case "oriented":
-                    type = SpriteType.Oriented;
-                    return true;
-
-                case "po":
-                case "parallel-oriented":
-                    type = SpriteType.ParallelOriented;
-                    return true;
-
-                default:
-                    type = default;
-                    return false;
-            }
-        }
-
-        public static string GetSpriteTypeShorthand(SpriteType type)
-        {
-            switch (type)
-            {
-                case SpriteType.ParallelUpright: return "pu";
-                case SpriteType.Upright: return "u";
-                default:
-                case SpriteType.Parallel: return "p";
-                case SpriteType.Oriented: return "o";
-                case SpriteType.ParallelOriented: return "po";
-            }
-        }
-
-        public static bool TryParseSpriteTextureFormat(string str, out SpriteTextureFormat textureFormat)
-        {
-            switch (str.ToLowerInvariant())
-            {
-                case "n":
-                case "normal":
-                    textureFormat = SpriteTextureFormat.Normal;
-                    return true;
-
-                case "a":
-                case "additive":
-                    textureFormat = SpriteTextureFormat.Additive;
-                    return true;
-
-                case "ia":
-                case "index-alpha":
-                    textureFormat = SpriteTextureFormat.IndexAlpha;
-                    return true;
-
-                case "at":
-                case "alpha-test":
-                    textureFormat = SpriteTextureFormat.AlphaTest;
-                    return true;
-
-                default:
-                    textureFormat = default;
-                    return false;
-            }
-        }
-
-        public static string GetSpriteTextureFormatShorthand(SpriteTextureFormat textureFormat)
-        {
-            switch (textureFormat)
-            {
-                case SpriteTextureFormat.Normal: return "n";
-                default:
-                case SpriteTextureFormat.Additive: return "a";
-                case SpriteTextureFormat.IndexAlpha: return "ia";
-                case SpriteTextureFormat.AlphaTest: return "at";
-            }
-        }
+        #endregion
     }
 }
