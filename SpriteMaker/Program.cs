@@ -886,10 +886,12 @@ namespace SpriteMaker
                 // Finally, remove this directory, but only if it's now empty:
                 if (!Directory.EnumerateFiles(directory).Any() && !Directory.EnumerateDirectories(directory).Any())
                     Directory.Delete(directory);
+
+                Log($"Removed sub-directory '{directory}'.");
             }
             catch (Exception ex)
             {
-                Log($"Failed to remove '{directory}': {ex.GetType().Name}: '{ex.Message}'.");
+                Log($"Failed to remove sub-directory '{directory}': {ex.GetType().Name}: '{ex.Message}'.");
             }
 
             return spritesRemoved;
