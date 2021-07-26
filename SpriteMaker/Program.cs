@@ -289,7 +289,7 @@ namespace SpriteMaker
             var imageFilesCreated = 0;
             var imageFilesSkipped = 0;
 
-            Directory.CreateDirectory(outputDirectory);
+            CreateDirectory(outputDirectory);
 
             foreach (var path in Directory.EnumerateFiles(inputDirectory, "*.spr"))
             {
@@ -593,7 +593,7 @@ namespace SpriteMaker
             var currentFileHashes = new Dictionary<string, byte[]>();
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
 
-            Directory.CreateDirectory(outputDirectory);
+            CreateDirectory(outputDirectory);
 
             // Multiple files can map to the same sprite, due to different extensions, filename suffixes and upper/lower-case differences.
             // We'll group files by sprite name, to make these collisions easy to detect:
@@ -805,7 +805,7 @@ namespace SpriteMaker
                                 throw new InvalidDataException($"Unable to convert '{file.path}': missing converter arguments.");
 
                             initialImageFilePath = Path.Combine(conversionOutputDirectory, Path.GetFileNameWithoutExtension(file.path));
-                            Directory.CreateDirectory(conversionOutputDirectory);
+                            CreateDirectory(conversionOutputDirectory);
 
                             var outputFilePaths = ExternalConversion.ExecuteConversionCommand(spriteSettings.Converter, spriteSettings.ConverterArguments, file.path, initialImageFilePath, Log);
                             if (outputFilePaths.Length < 1)
@@ -1107,6 +1107,12 @@ namespace SpriteMaker
 
         // TODO: Move this to a common place in Shared -- it's duplicated 3 times now!
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
+
+        static void CreateDirectory(string path)
+        {
+            if (!string.IsNullOrEmpty(path))
+                Directory.CreateDirectory(path);
+        }
 
 
         static void Log(string message)

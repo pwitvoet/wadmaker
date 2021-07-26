@@ -53,7 +53,7 @@ namespace WadMaker
                 if (!settings.DisableFileLogging)
                 {
                     var logName = Path.GetFileNameWithoutExtension(settings.InputDirectory ?? settings.InputFilePath);
-                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), $"wadmaker - {logName}.log");
+                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory ?? settings.InputFilePath), $"wadmaker - {logName}.log");
                     LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
                     LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
                 }
@@ -164,7 +164,7 @@ namespace WadMaker
             else
                 textures = Wad.Load(inputFilePath).Textures;
 
-            Directory.CreateDirectory(outputDirectory);
+            CreateDirectory(outputDirectory);
 
             var isDecalsWad = Path.GetFileName(inputFilePath).ToLowerInvariant() == "decals.wad";
             foreach (var texture in textures)
@@ -294,7 +294,7 @@ namespace WadMaker
                                 throw new InvalidDataException($"Unable to convert '{filePath}': missing converter arguments.");
 
                             imageFilePath = Path.Combine(conversionOutputDirectory, textureName);
-                            Directory.CreateDirectory(conversionOutputDirectory);
+                            CreateDirectory(conversionOutputDirectory);
 
                             var outputFilePaths = ExternalConversion.ExecuteConversionCommand(textureSettings.Converter, textureSettings.ConverterArguments, filePath, imageFilePath, Log);
                             if (imageFilePath.Length < 1)
@@ -360,7 +360,7 @@ namespace WadMaker
                 }
 
                 // Finally, save the wad file:
-                Directory.CreateDirectory(Path.GetDirectoryName(outputWadFilePath));
+                CreateDirectory(Path.GetDirectoryName(outputWadFilePath));
                 wad.Save(outputWadFilePath);
             }
             finally
@@ -647,6 +647,12 @@ namespace WadMaker
         }
 
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
+
+        static void CreateDirectory(string path)
+        {
+            if (!string.IsNullOrEmpty(path))
+                Directory.CreateDirectory(path);
+        }
 
 
         static void Log(string message)
