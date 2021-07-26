@@ -386,15 +386,18 @@ namespace WadMaker
         // Wad extraction:
         static Image<Rgba32> DecalTextureToImage(Texture texture, int mipmap = 0)
         {
+            var width = texture.Width >> mipmap;
+            var height = texture.Height >> mipmap;
+            var imageData = texture.GetImageData(mipmap);
             var decalColor = texture.Palette[255];
 
-            var image = new Image<Rgba32>(texture.Width, texture.Height);
+            var image = new Image<Rgba32>(width, height);
             for (int y = 0; y < image.Height; y++)
             {
                 var rowSpan = image.GetPixelRowSpan(y);
                 for (int x = 0; x < image.Width; x++)
                 {
-                    var paletteIndex = texture.ImageData[y * texture.Width + x];
+                    var paletteIndex = imageData[y * width + x];
                     rowSpan[x] = new Rgba32(decalColor.R, decalColor.G, decalColor.B, paletteIndex);
                 }
             }
@@ -404,15 +407,18 @@ namespace WadMaker
 
         static Image<Rgba32> TextureToImage(Texture texture, int mipmap = 0)
         {
+            var width = texture.Width >> mipmap;
+            var height = texture.Height >> mipmap;
+            var imageData = texture.GetImageData(mipmap);
             var hasColorKey = texture.Name.StartsWith("{");
 
-            var image = new Image<Rgba32>(texture.Width, texture.Height);
+            var image = new Image<Rgba32>(width, height);
             for (int y = 0; y < image.Height; y++)
             {
                 var rowSpan = image.GetPixelRowSpan(y);
                 for (int x = 0; x < image.Width; x++)
                 {
-                    var paletteIndex = texture.ImageData[y * texture.Width + x];
+                    var paletteIndex = imageData[y * width + x];
                     if (paletteIndex == 255 && hasColorKey)
                     {
                         rowSpan[x] = new Rgba32(0, 0, 0, 0);

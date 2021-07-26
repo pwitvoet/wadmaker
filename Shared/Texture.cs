@@ -100,6 +100,18 @@ namespace Shared
             ImageData = imageData;
             Palette = palette;
         }
+
+        public byte[] GetImageData(int mipmapLevel = 0)
+        {
+            switch (mipmapLevel)
+            {
+                default:
+                case 0: return ImageData;
+                case 1: return Mipmap1Data;
+                case 2: return Mipmap2Data;
+                case 3: return Mipmap3Data;
+            }
+        }
     }
 
     public struct CharInfo
