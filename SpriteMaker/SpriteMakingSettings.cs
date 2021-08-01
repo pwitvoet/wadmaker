@@ -496,8 +496,7 @@ namespace SpriteMaker
                     case ConverterArgumentsKey:
                         RequireToken(":");
                         spriteSettings.ConverterArguments = ParseToken(s => s, "converter arguments string");
-                        if (!spriteSettings.ConverterArguments.Contains("{input}") || !spriteSettings.ConverterArguments.Contains("{output}"))
-                            throw new InvalidDataException("Converter arguments must contain {input} and {output} placeholders.");
+                        ExternalConversion.ThrowIfArgumentsAreInvalid(spriteSettings.ConverterArguments);
                         break;
 
                     default:

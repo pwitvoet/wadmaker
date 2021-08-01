@@ -296,8 +296,7 @@ namespace WadMaker
                     case ConverterArgumentsKey:
                         RequireToken(":");
                         textureSettings.ConverterArguments = ParseToken(s => s, "converter arguments string");
-                        if (!textureSettings.ConverterArguments.Contains("{input}") || !textureSettings.ConverterArguments.Contains("{output}"))
-                            throw new InvalidDataException("Converter arguments must contain {input} and {output} placeholders.");
+                        ExternalConversion.ThrowIfArgumentsAreInvalid(textureSettings.ConverterArguments);
                         break;
 
                     default:

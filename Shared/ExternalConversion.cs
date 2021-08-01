@@ -10,12 +10,17 @@ namespace Shared
         /// <summary>
         /// Calls an external conversion command. Replaces any occurrence of the special '{input}' and '{output}' markers in <paramref name="converterArguments"/>
         /// with the given <paramref name="inputPath"/> and <paramref name="outputPath"/> respectively. Returns the paths of the resulting file(s).
+        /// <para>
+        /// Use '{input_escaped}' and '{output_escaped}' to get the input and output paths with escaped backslashes (e.g. 'C:\\directory\\filename' instead of 'C:\directory\filename').
+        /// </para>
         /// </summary>
         public static string[] ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath, Action<string> log)
         {
             var arguments = converterArguments
                 .Replace("{input}", inputPath)
                 .Replace("{output}", outputPath)
+                .Replace("{input_escaped}", inputPath.Replace("\\", "\\\\"))
+                .Replace("{output_escaped}", outputPath.Replace("\\", "\\\\"))
                 .Trim();
 
             log($"Executing conversion command: '{converter} {arguments}'.");
@@ -41,6 +46,16 @@ namespace Shared
 
             return Directory.EnumerateFiles(Path.GetDirectoryName(outputPath), Path.GetFileName(outputPath) + "*")
                 .ToArray();
+        }
+
+        /// <summary>
+        /// Throws an exception if the given converter arguments string does not contain an input and output placeholder.
+        /// </summary>
+        public static void ThrowIfArgumentsAreInvalid(string converterArguments)
+        {
+            if ((!converterArguments.Contains("{input}") && !converterArguments.Contains("{input_escaped}")) ||
+                (!converterArguments.Contains("{output}") && !converterArguments.Contains("{output_escaped")))
+                throw new InvalidDataException("Converter arguments must contain {input} (or {input_escaped}) and {output} (or {output_escaped}) placeholders.");
         }
 
         /// <summary>
