@@ -822,6 +822,8 @@ namespace SpriteMaker
                             var image = ImageReading.ReadImage(imageFilePath);
                             if (file.filenameSettings.SpritesheetTileSize is Size tileSize)
                             {
+                                if (tileSize.Width < 1 || tileSize.Height < 1)
+                                    throw new InvalidDataException($"Invalid tile size for image '{file.path}' ({tileSize.Width} x {tileSize.Height}): tile size must not be negative.");
                                 if (image.Width % tileSize.Width != 0 || image.Height % tileSize.Height != 0)
                                     throw new InvalidDataException($"Spritesheet image '{file.path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
 
