@@ -119,21 +119,21 @@ Half-Life sprites use a 256-color palette. Their maximum size is 512x512, but un
 Note that sprite files do not store color profile information, and because Half-Life does not appear to apply gamma correction properly on all systems, sprites (especially dark ones) may look too bright on some systems.
 
 ### Sprite orientations
-A sprite can have one of the following orientations:
+SpriteMaker lets you select a sprite's orientation by adding including its selector in an image's filename, for example: `smoke.o.png` contains `.o`, which is the shorthand selector for 'Oriented'. A sprite can have one of the following orientations:
 
-- **Parallel-upright** - A sprite that always faces the camera, but is locked along the z-axis. `smoke.pu.png`
-- **Upright** - Similar to 'Parallel-upright', but faces the player's origin instead of the camera. `smoke.u.png`
-- **Parallel** - A sprite that always faces the camera. **Most sprites use this orientation.** `smoke.png`
-- **Oriented** - A sprite with a fixed orientation that can be set in the level editor. `smoke.o.png`
-- **Parallel-oriented** - Similar to 'Oriented', but the sprite will also face the camera. `smoke.po.png`
+- **Parallel-upright** - A sprite that always faces the camera, but is locked along the z-axis. Filename selector: `.pu` or `.parallel-upright`.
+- **Upright** - Similar to 'Parallel-upright', but faces the player's origin instead of the camera. Filename selector: `.u` or `.upright`.
+- **Parallel** - A sprite that always faces the camera. **Most sprites use this orientation.** Because this is the default orientation, its filename selector (`.p` or `.parallel`) can be left out.
+- **Oriented** - A sprite with a fixed orientation that can be set in the level editor. Filename selector: `.o` or `.oriented`.
+- **Parallel-oriented** - Similar to 'Oriented', but the sprite will also face the camera. Filename selector: `.po` or `.parallel-oriented`.
 
 ### Sprite texture formats
-A sprite can use one of the following texture formats:
+SpriteMaker also uses filename selectors to set a sprite's texture format. A sprite can use one of the following texture formats:
 
-- **Normal** - A 256-color sprite, with no support for transparency. However, it actually behaves the same as the 'Additive' format. `smoke.n.png`
-- **Additive** - A 256-color sprite, where the brightness of each pixel determines how transparent it is. Black pixels are fully transparent, white pixels are fully opaque. However, this behavior only works when a sprite entity uses the 'additive' render mode. **Most sprites use this format.** `smoke.png`
-- **Index-alpha** - A 1-color sprite, with 256 levels of transparency. This is similar to how decal textures work. `smoke.ia.png`
-- **Alpha-test** - A 255-color sprite, with support for transparency. Pixels are either fully opaque or fully transparent. This is similar to how transparent textures work. `smoke.at.png`
+- **Normal** - A 256-color sprite, with no support for transparency. However, it actually behaves the same as the 'Additive' format. Filename selector: `.n` or `.normal`.
+- **Additive** - A 256-color sprite, where the brightness of each pixel determines how transparent it is. Black pixels are fully transparent, white pixels are fully opaque. However, this behavior only works when a sprite entity uses the 'additive' render mode. **Most sprites use this format.** Because this is the default texture format, its filename selector (`.a` or `.additive`) can be left out.
+- **Index-alpha** - A 1-color sprite, with 256 levels of transparency. This is similar to how decal textures work. Filename selector: `.ia` or `.index-alpha`.
+- **Alpha-test** - A 255-color sprite, with support for transparency. Pixels are either fully opaque or fully transparent. This is similar to how transparent textures work. Filename selector: `.at` or `.alpha-test`.
 
 ## Custom converters
 SpriteMaker can be configured to use custom converters for certain images. This makes it possible to achieve better visual results, or to handle file types that SpriteMaker does not support directly. IrfanView is particularly useful in this regard, but any other command-line program can be used, as long as both the input and output path can be provided as arguments.
