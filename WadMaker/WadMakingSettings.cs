@@ -214,7 +214,7 @@ namespace WadMaker
         private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
         {
             var tokens = GetTokens(line).ToArray();
-            if (tokens.Length == 0 || tokens[0] == "//")
+            if (tokens.Length == 0 || IsComment(tokens[0]))
                 return null;
 
             var i = 0;
@@ -225,7 +225,7 @@ namespace WadMaker
             while (i < tokens.Length)
             {
                 var token = tokens[i++];
-                if (token == "//")
+                if (IsComment(token))
                     break;
 
                 if (internalFormat)
@@ -358,8 +358,9 @@ namespace WadMaker
                 else if (c == '/' && i > start && line[i - 1] == '/')
                 {
                     if (i - 1 > start) yield return Token(i - 1);
-                    yield return "//";
-                    start = i + 1;
+                    start = i - 1;
+                    yield return Token(line.Length);
+                    yield break;
                 }
                 else if (c == '\'')
                 {
@@ -374,6 +375,8 @@ namespace WadMaker
 
             string Token(int end) => line.Substring(start, end - start);
         }
+
+        private static bool IsComment(string token) => token?.StartsWith("//") == true;
 
         private static DitheringAlgorithm ParseDitheringAlgorithm(string str)
         {
