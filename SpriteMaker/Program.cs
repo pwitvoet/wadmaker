@@ -70,7 +70,9 @@ namespace SpriteMaker
         {
             try
             {
-                Log($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                var assemblyName = Assembly.GetExecutingAssembly().GetName();
+                var launchInfo = $"{assemblyName.Name}.exe (v{assemblyName.Version}) {string.Join(" ", args)}";
+                Log(launchInfo);
 
                 var settings = ParseArguments(args);
                 if (!settings.DisableFileLogging)
@@ -78,7 +80,7 @@ namespace SpriteMaker
                     var logName = Path.GetFileNameWithoutExtension(settings.InputPath);
                     var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputPath), $"spritemaker - {logName}.log");
                     LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
-                    LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                    LogFile.WriteLine(launchInfo);
                 }
 
                 if (settings.Extract)

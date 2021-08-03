@@ -47,7 +47,9 @@ namespace WadMaker
         {
             try
             {
-                Log($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                var assemblyName = Assembly.GetExecutingAssembly().GetName();
+                var launchInfo = $"{assemblyName.Name}.exe (v{assemblyName.Version}) {string.Join(" ", args)}";
+                Log(launchInfo);
 
                 var settings = ParseArguments(args);
                 if (!settings.DisableFileLogging)
@@ -55,7 +57,7 @@ namespace WadMaker
                     var logName = Path.GetFileNameWithoutExtension(settings.InputDirectory ?? settings.InputFilePath);
                     var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory ?? settings.InputFilePath), $"wadmaker - {logName}.log");
                     LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
-                    LogFile.WriteLine($"{Assembly.GetExecutingAssembly().GetName().Name}.exe {string.Join(" ", args)}");
+                    LogFile.WriteLine(launchInfo);
                 }
 
                 if (settings.Extract)
