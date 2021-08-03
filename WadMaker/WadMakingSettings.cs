@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace WadMaker
@@ -26,12 +27,14 @@ namespace WadMaker
             public string NamePattern { get; }
             public TextureSettings? TextureSettings { get; }
             public DateTimeOffset LastModified { get; }
+            public bool IsGlobal { get; }
 
-            public Rule(string namePattern, TextureSettings? textureSettings, DateTimeOffset lastModified)
+            public Rule(string namePattern, TextureSettings? textureSettings, DateTimeOffset lastModified, bool isGlobal)
             {
                 NamePattern = namePattern;
                 TextureSettings = textureSettings;
                 LastModified = lastModified;
+                IsGlobal = isGlobal;
             }
         }
 
@@ -121,6 +124,7 @@ namespace WadMaker
         /// </summary>
         public static WadMakingSettings Load(string folder)
         {
+            var globalConfigFilePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), ConfigFilename);
             var configFilePath = Path.Combine(folder, ConfigFilename);
             var historyFilePath = Path.Combine(folder, HistoryFilename);
 
@@ -136,15 +140,30 @@ namespace WadMaker
                 }
             }
 
-            // Then read the current rules (wadmaker.config):
+            // Then read the global rules (wadmaker.config in WadMaker.exe's directory):
             var newRules = new Dictionary<string, Rule>();
-            var newTimestamp = DateTimeOffset.UtcNow;
+            var newGlobalTimestamp = DateTimeOffset.UtcNow;
+            var newLocalTimestamp = DateTimeOffset.UtcNow;
+
+            if (File.Exists(globalConfigFilePath))
+            {
+                newGlobalTimestamp = new DateTimeOffset(new FileInfo(globalConfigFilePath).LastWriteTimeUtc);
+                foreach (var line in File.ReadAllLines(globalConfigFilePath))
+                {
+                    var rule = ParseRuleLine(line, newLocalTimestamp, isGlobal: true);
+                    if (rule != null)
+                        newRules[rule.NamePattern] = rule;
+                }
+            }
+
+            // And read the specified directory's current rules (wadmaker.config):
             if (File.Exists(configFilePath))
             {
-                newTimestamp = new DateTimeOffset(new FileInfo(configFilePath).LastWriteTimeUtc);
+                newLocalTimestamp = new DateTimeOffset(new FileInfo(configFilePath).LastWriteTimeUtc);
                 foreach (var line in File.ReadAllLines(configFilePath))
                 {
-                    var rule = ParseRuleLine(line, newTimestamp);
+                    // NOTE: Local rules take precedence over global ones.
+                    var rule = ParseRuleLine(line, newLocalTimestamp);
                     if (rule != null)
                         newRules[rule.NamePattern] = rule;
                 }
@@ -163,9 +182,24 @@ namespace WadMaker
                 var oldRule = oldRules[namePattern];
                 var newRule = newRules[namePattern];
                 if (!newRule.TextureSettings.Equals(oldRule.TextureSettings))
-                    oldRules[namePattern] = newRule;    // Modified settings, so remember the new settings and timestamp
+                {
+                    // Modified settings, so remember the new settings and timestamp.
+                    if (!oldRule.IsGlobal && newRule.IsGlobal)
+                    {
+                        // If removing a local rule exposes an (older) global rule, then use the local config file's last-write-time as timestamp instead,
+                        // because that's when the effective settings changed:
+                        oldRules[namePattern] = new Rule(namePattern, newRule.TextureSettings, newLocalTimestamp, true);
+                    }
+                    else
+                    {
+                        oldRules[namePattern] = newRule;
+                    }
+                }
                 else
-                    newRules[namePattern] = oldRule;    // Same settings, so use the old timestamp (so the texture may not need to be rebuilt).
+                {
+                    // Same settings, so use the old timestamp (so the texture may not need to be rebuilt):
+                    newRules[namePattern] = oldRule;
+                }
             }
 
             foreach (var namePattern in addedNamePatterns)
@@ -173,11 +207,13 @@ namespace WadMaker
 
             foreach (var namePattern in removedNamePatterns)
             {
+                var oldRule = oldRules[namePattern];
+
                 // Ignore removal timestamps:
-                if (oldRules[namePattern].TextureSettings == null)
+                if (oldRule.TextureSettings == null)
                     continue;
 
-                var removedRule = new Rule(namePattern, null, newTimestamp);
+                var removedRule = new Rule(namePattern, null, oldRule.IsGlobal ? newGlobalTimestamp : newLocalTimestamp, oldRule.IsGlobal);
                 oldRules[namePattern] = removedRule;    // Do not remember removed settings, but do remember when they were removed
                 newRules[namePattern] = removedRule;
             }
@@ -209,9 +245,10 @@ namespace WadMaker
         const string ConverterArgumentsKey = "arguments";
         const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
+        const string GlobalKey = "global";
 
 
-        private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
+        private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
         {
             var tokens = GetTokens(line).ToArray();
             if (tokens.Length == 0 || IsComment(tokens[0]))
@@ -240,6 +277,10 @@ namespace WadMaker
 
                         case RemovedKey:
                             isRemoved = true;
+                            break;
+
+                        case GlobalKey:
+                            isGlobal = true;
                             break;
 
                         default:
@@ -303,7 +344,7 @@ namespace WadMaker
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
             }
-            return new Rule(namePattern, isRemoved ? null : (TextureSettings?)textureSettings, ruleTimestamp ?? fileTimestamp);
+            return new Rule(namePattern, isRemoved ? null : (TextureSettings?)textureSettings, ruleTimestamp ?? fileTimestamp, isGlobal);
 
 
             void RequireToken(string value)
@@ -421,6 +462,8 @@ namespace WadMaker
                         if (settings.DecalColor != null) writer.Write($" {DecalColorKey}: {Serialize(settings.DecalColor.Value, false)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
+
+                        if (rule.IsGlobal) writer.Write($" {GlobalKey}");
                     }
                     else
                     {

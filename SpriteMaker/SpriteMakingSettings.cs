@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Web;
 
@@ -30,12 +31,14 @@ namespace SpriteMaker
             public string NamePattern { get; }
             public SpriteSettings? SpriteSettings { get; }
             public DateTimeOffset LastModified { get; }
+            public bool IsGlobal { get; }
 
-            public Rule(string namePattern, SpriteSettings? spriteSettings, DateTimeOffset lastModified)
+            public Rule(string namePattern, SpriteSettings? spriteSettings, DateTimeOffset lastModified, bool isGlobal)
             {
                 NamePattern = namePattern;
                 SpriteSettings = spriteSettings;
                 LastModified = lastModified;
+                IsGlobal = isGlobal;
             }
         }
 
@@ -165,6 +168,7 @@ namespace SpriteMaker
         /// </summary>
         public static SpriteMakingSettings Load(string directory)
         {
+            var globalConfigFilePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), ConfigFilename);
             var configFilePath = Path.Combine(directory, ConfigFilename);
             var historyFilePath = Path.Combine(directory, HistoryFilename);
 
@@ -176,15 +180,30 @@ namespace SpriteMaker
             if (File.Exists(historyFilePath))
                 (oldRules, previousFileHashes, previousSubDirectoryNames) = ParseHistoryFile(historyFilePath);
 
-            // Then read the current rules (spritemaker.config):
+            // Then read the global rules (spritemaker.config in SpriteMaker.exe's directory):
             var newRules = new Dictionary<string, Rule>();
-            var newTimestamp = DateTimeOffset.UtcNow;
+            var newGlobalTimestamp = DateTimeOffset.UtcNow;
+            var newLocalTimestamp = DateTimeOffset.UtcNow;
+
+            if (File.Exists(globalConfigFilePath))
+            {
+                newGlobalTimestamp = new DateTimeOffset(new FileInfo(globalConfigFilePath).LastWriteTimeUtc);
+                foreach (var line in File.ReadAllLines(globalConfigFilePath))
+                {
+                    var rule = ParseRuleLine(line, newLocalTimestamp, isGlobal: true);
+                    if (rule != null)
+                        newRules[rule.NamePattern] = rule;
+                }
+            }
+
+            // And read the specified directory's current rules (spritemaker.config):
             if (File.Exists(configFilePath))
             {
-                newTimestamp = new DateTimeOffset(new FileInfo(configFilePath).LastWriteTimeUtc);
+                // NOTE: Local rules take precedence over global ones.
+                newLocalTimestamp = new DateTimeOffset(new FileInfo(configFilePath).LastWriteTimeUtc);
                 foreach (var line in File.ReadAllLines(configFilePath))
                 {
-                    var rule = ParseRuleLine(line, newTimestamp);
+                    var rule = ParseRuleLine(line, newLocalTimestamp);
                     if (rule != null)
                         newRules[rule.NamePattern] = rule;
                 }
@@ -203,9 +222,24 @@ namespace SpriteMaker
                 var oldRule = oldRules[namePattern];
                 var newRule = newRules[namePattern];
                 if (!newRule.SpriteSettings.Equals(oldRule.SpriteSettings))
-                    oldRules[namePattern] = newRule;    // Modified settings, so remember the new settings and timestamp
+                {
+                    // Modified settings, so remember the new settings and timestamp.
+                    if (!oldRule.IsGlobal && newRule.IsGlobal)
+                    {
+                        // If removing a local rule exposes an (older) global rule, then use the local config file's last-write-time as timestamp instead,
+                        // because that's when the effective settings changed:
+                        oldRules[namePattern] = new Rule(namePattern, newRule.SpriteSettings, newLocalTimestamp, true);
+                    }
+                    else
+                    {
+                        oldRules[namePattern] = newRule;
+                    }
+                }
                 else
-                    newRules[namePattern] = oldRule;    // Same settings, so use the old timestamp (so the sprite may not need to be rebuilt).
+                {
+                    // Same settings, so use the old timestamp (so the sprite may not need to be rebuilt):
+                    newRules[namePattern] = oldRule;
+                }
             }
 
             foreach (var namePattern in addedNamePatterns)
@@ -213,11 +247,13 @@ namespace SpriteMaker
 
             foreach (var namePattern in removedNamePatterns)
             {
+                var oldRule = oldRules[namePattern];
+
                 // Ignore removal timestamps:
-                if (oldRules[namePattern].SpriteSettings == null)
+                if (oldRule.SpriteSettings == null)
                     continue;
 
-                var removedRule = new Rule(namePattern, null, newTimestamp);
+                var removedRule = new Rule(namePattern, null, oldRule.IsGlobal ? newGlobalTimestamp : newLocalTimestamp, oldRule.IsGlobal);
                 oldRules[namePattern] = removedRule;    // Do not remember removed settings, but do remember when they were removed
                 newRules[namePattern] = removedRule;
             }
@@ -339,6 +375,7 @@ namespace SpriteMaker
         const string ConverterArgumentsKey = "arguments";
         const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
+        const string GlobalKey = "global";
 
 
         const string TimestampsSegmentHeader = "RULE TIMESTAMPS:";
@@ -401,7 +438,7 @@ namespace SpriteMaker
             return (oldRules, oldFileHashes, oldSubDirectories);
         }
 
-        private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false)
+        private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
         {
             var tokens = GetTokens(line).ToArray();
             if (tokens.Length == 0 || IsComment(tokens[0]))
@@ -430,6 +467,10 @@ namespace SpriteMaker
 
                         case RemovedKey:
                             isRemoved = true;
+                            break;
+
+                        case GlobalKey:
+                            isGlobal = true;
                             break;
 
                         default:
@@ -503,7 +544,7 @@ namespace SpriteMaker
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
             }
-            return new Rule(namePattern, isRemoved ? null : (SpriteSettings?)spriteSettings, ruleTimestamp ?? fileTimestamp);
+            return new Rule(namePattern, isRemoved ? null : (SpriteSettings?)spriteSettings, ruleTimestamp ?? fileTimestamp, isGlobal);
 
 
             void RequireToken(string value)
@@ -651,6 +692,8 @@ namespace SpriteMaker
                         if (settings.IndexAlphaColor != null) writer.Write($" {IndexAlphaColorKey}: {Serialize(settings.IndexAlphaColor.Value)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
+
+                        if (rule.IsGlobal) writer.Write($" {GlobalKey}");
                     }
                     else
                     {
