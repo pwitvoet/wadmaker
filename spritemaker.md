@@ -92,7 +92,7 @@ Some settings can be specified in the filename of an image. These take precedenc
 
 #### spritemaker.config files
 
-Less common settings can be specified per sprite, or per group of sprites, by creating a plain-text `spritemaker.config` file in the images directory. For global settings, use the `spritemaker.config` file in SpriteMaker.exe's directory. Global rules are overridden by local rules with the same name
+Less common settings can be specified per sprite, or per group of sprites, by creating a plain-text `spritemaker.config` file in the images directory. For global settings, use the `spritemaker.config` file in SpriteMaker.exe's directory. Global rules are overridden by local rules with the same name.
 
 A settings line starts with a sprite name or a name pattern, followed by one or more settings. Empty lines and comments are ignored. For example:
 
@@ -165,7 +165,7 @@ SpriteMaker also uses filename selectors to set a sprite's texture format. A spr
 - **Alpha-test** - A 255-color sprite, with support for transparency. Pixels are either fully opaque or fully transparent. This is similar to how transparent textures work. Filename selector: `.at` or `.alpha-test`.
 
 ## Custom converters
-SpriteMaker can be configured to use custom converters for certain images. This makes it possible to achieve better visual results, or to handle file types that SpriteMaker does not support directly. IrfanView is particularly useful in this regard, but any other command-line program can be used, as long as both the input and output path can be provided as arguments.
+SpriteMaker can be configured to use custom converters for certain images. This makes it possible to achieve better visual results, or to handle file types that SpriteMaker does not support directly. IrfanView is particularly useful in this regard, but any other command-line program can be used, as long as both the input and output path can be provided as arguments. It's a good idea to put conversion rules in the global `spritemaker.config` file, so they don't need to be repeated in every directory's `spritemaker.config` file.
 
 ### Using IrfanView for color conversion
 To use IrfanView to convert images to 256 colors, add the following line to your `spritemaker.config` file:
