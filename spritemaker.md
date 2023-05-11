@@ -65,7 +65,7 @@ Some settings can be specified in the filename of an image. These take precedenc
 
 **Sprite orientation:**
 
-- `.parallel-upright` or `.po` - Makes the sprite always face the camera, but locks it along the z-axis.
+- `.parallel-upright` or `.pu` - Makes the sprite always face the camera, but locks it along the z-axis.
 - `.upright` or `.u` - Similar to 'parallel-upright', but faces the player's origin instead of the camera.
 - `.parallel` or `.p` - Makes the sprite always face the camera. *This is the default orientation so it does not need to be specified explicitly.*
 - `.oriented` or `.o` - Creates a sprite with a fixed orientation that can be set in the level editor.
@@ -76,7 +76,7 @@ Some settings can be specified in the filename of an image. These take precedenc
 - `.normal` or `.n` - Creates a 256-color sprite, with no support for transparency. This behaves the same as the 'additive' format.
 - `.additive` or `.a` - Creates a 256-color sprite, where the brightness of each pixel determines its transparency (black being fully transparent, white being fully opaque). This does require a sprite entity to use the 'additive' render mode. *This is the default texture format so it does not need to be specified explicitly.*
 - `.index-alpha` or `.ia` - Creates a 1-color sprite, with 256 levels of transparency, similar to how decal textures work.
-- `.alpha-test` or `.at` - Creaets a 255-color sprite, with support for transparency. Pixels are either fully opaque or fully transparent, similar to how transparent textures work.
+- `.alpha-test` or `.at` - Creates a 255-color sprite, with support for transparency. Pixels are either fully opaque or fully transparent, similar to how transparent textures work.
 
 **Spritesheet size:**
 
