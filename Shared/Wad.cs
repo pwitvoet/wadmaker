@@ -96,8 +96,8 @@
                 stream.Write((uint)texture.Height);
                 stream.Write((uint)40);
                 stream.Write((uint)(40 + texture.ImageData.Length));
-                stream.Write((uint)(40 + texture.ImageData.Length + texture.Mipmap1Data.Length));
-                stream.Write((uint)(40 + texture.ImageData.Length + texture.Mipmap1Data.Length + texture.Mipmap2Data.Length));
+                stream.Write((uint)(40 + texture.ImageData.Length + texture.Mipmap1Data!.Length));
+                stream.Write((uint)(40 + texture.ImageData.Length + texture.Mipmap1Data!.Length + texture.Mipmap2Data!.Length));
 
                 stream.Write(texture.ImageData);
                 stream.Write(texture.Mipmap1Data);
@@ -119,7 +119,7 @@
 
                 stream.Write((uint)texture.RowCount);
                 stream.Write((uint)texture.RowHeight);
-                foreach (var charInfo in texture.CharInfos)
+                foreach (var charInfo in texture.CharInfos!)
                 {
                     stream.Write((ushort)charInfo.StartOffset);
                     stream.Write((ushort)charInfo.CharWidth);
@@ -241,9 +241,9 @@
             {
                 var size = 40;
                 size += texture.ImageData.Length;
-                size += texture.Mipmap1Data.Length;
-                size += texture.Mipmap2Data.Length;
-                size += texture.Mipmap3Data.Length;
+                size += texture.Mipmap1Data!.Length;
+                size += texture.Mipmap2Data!.Length;
+                size += texture.Mipmap3Data!.Length;
                 size += 2;
                 size += texture.Palette.Length * 3;
                 size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
@@ -252,7 +252,7 @@
             else if (texture.Type == TextureType.Font)
             {
                 var size = 16;
-                size += texture.CharInfos.Length * 4;
+                size += texture.CharInfos!.Length * 4;
                 size += texture.ImageData.Length;
                 size += 2;
                 size += texture.Palette.Length * 3;
@@ -282,7 +282,7 @@
             public uint FullLength { get; set; }
             public TextureType Type { get; set; }
             public byte CompressionType { get; set; }   // Always set to 0 (no compression).
-            public string Name { get; set; }            // 16 bytes.
+            public string Name { get; set; } = "";      // 16 bytes.
         }
     }
 }

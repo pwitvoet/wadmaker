@@ -70,12 +70,12 @@ namespace WadMaker
         /// This also requires <see cref="ConverterArguments"/> to be set.
         /// WadMaker will use the output image to create a texture. The output image will be removed afterwards.
         /// </summary>
-        public string Converter { get; set; }
+        public string? Converter { get; set; }
 
         /// <summary>
         /// The arguments to pass to the converter application. These must include {input} and {output} markers, so WadMaker can pass the
         /// current file path and the location where the converter application must save the output image.
         /// </summary>
-        public string ConverterArguments { get; set; }
+        public string? ConverterArguments { get; set; }
     }
 }

@@ -4,7 +4,7 @@
     /// A list of disposable items. Disposing this list will dispose and remove its contents.
     /// </summary>
     public class DisposableList<T> : List<T>, IDisposable
-        where T : IDisposable
+        where T : IDisposable?
     {
         public DisposableList()
             : base()

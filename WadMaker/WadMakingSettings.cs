@@ -1,6 +1,5 @@
 ﻿using Shared;
 using SixLabors.ImageSharp.PixelFormats;
-using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace WadMaker
@@ -244,7 +243,7 @@ namespace WadMaker
         const string GlobalKey = "global";
 
 
-        private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
+        private static Rule? ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
         {
             var tokens = GetTokens(line).ToArray();
             if (tokens.Length == 0 || IsComment(tokens[0]))
@@ -349,7 +348,7 @@ namespace WadMaker
                 if (tokens[i++] != value) throw new InvalidDataException($"Expected a '{value}', but found '{tokens[i - 1]}'.");
             }
 
-            T ParseToken<T>(Func<string, T> parse, string label = null)
+            T ParseToken<T>(Func<string, T> parse, string? label = null)
             {
                 if (i >= tokens.Length)
                     throw new InvalidDataException($"Expected a {label ?? typeof(T).ToString()}, but found end of line.");
@@ -358,7 +357,7 @@ namespace WadMaker
                 {
                     return parse(tokens[i++]);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     throw new InvalidDataException($"Expected a {label ?? typeof(T).ToString()}, but found '{tokens[i - 1]}'.");
                 }

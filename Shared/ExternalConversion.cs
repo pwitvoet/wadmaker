@@ -41,7 +41,7 @@ namespace Shared
                 log($"Conversion command finished with exit code: {process.ExitCode}.");
             }
 
-            return Directory.EnumerateFiles(Path.GetDirectoryName(outputPath), Path.GetFileName(outputPath) + "*")
+            return Directory.EnumerateFiles(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath) + "*")
                 .ToArray();
         }
 

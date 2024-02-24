@@ -1,4 +1,5 @@
 ﻿using SixLabors.ImageSharp.PixelFormats;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Shared
 {
@@ -46,7 +47,7 @@ namespace Shared
         /// Removes embedded textures from the specified bsp file.
         /// If no output path is provided, then the input bsp file is overwritten.
         /// </summary>
-        public static int RemoveEmbeddedTextures(string path, string outputPath = null)
+        public static int RemoveEmbeddedTextures(string path, string? outputPath = null)
         {
             // Read all bsp lump contents:
             var lumps = new List<Lump>();
@@ -209,7 +210,7 @@ namespace Shared
                 stream.Write(offset);
                 if (texture.IsEmbedded)
                 {
-                    offset += 40 + texture.ImageData.Sum(imageData => imageData.Length) + 2 + texture.Palette.Length * 3;
+                    offset += 40 + texture.ImageData.Sum(imageData => imageData!.Length) + 2 + texture.Palette.Length * 3;
                     offset += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 }
                 else
@@ -237,7 +238,7 @@ namespace Shared
                 foreach (var imageData in texture.ImageData)
                 {
                     stream.Write(offset);
-                    offset += (uint)imageData.Length;
+                    offset += (uint)imageData!.Length;
                 }
 
                 foreach (var imageData in texture.ImageData)
@@ -274,9 +275,12 @@ namespace Shared
             public string Name;
             public uint Width;
             public uint Height;
-            public byte[][] ImageData;
-            public Rgba32[] Palette;
 
+            public byte[]?[]? ImageData;
+            public Rgba32[]? Palette;
+
+            [MemberNotNullWhen(true, nameof(ImageData))]
+            [MemberNotNullWhen(true, nameof(Palette))]
             public bool IsEmbedded => ImageData != null && ImageData.All(data => data != null) && Palette != null;
         }
     }

@@ -30,7 +30,7 @@ namespace Shared.Sprites
         public static Sprite CreateSprite(SpriteType type, SpriteTextureFormat textureFormat, int maxWidth, int maxHeight, Rgba32[] palette)
         {
             if (maxWidth < 1 || maxHeight < 1) throw new ArgumentException("Width and height must greater than zero.");
-            if (palette?.Count() > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
+            if (palette.Length > 256) throw new ArgumentException("Palette must not contain more than 256 colors.", nameof(palette));
 
             return new Sprite(
                 type,
@@ -132,16 +132,14 @@ namespace Shared.Sprites
 
         private static Frame ReadFrame(Stream stream)
         {
-            var frame = new Frame();
+            var type = (FrameType)stream.ReadUint();
+            var frameOriginX = stream.ReadInt();
+            var frameOriginY = stream.ReadInt();
+            var frameWidth = stream.ReadUint();
+            var frameHeight = stream.ReadUint();
+            var imageData = stream.ReadBytes((int)(frameWidth * frameHeight));
 
-            frame.Type = (FrameType)stream.ReadUint();
-            frame.FrameOriginX = stream.ReadInt();
-            frame.FrameOriginY = stream.ReadInt();
-            frame.FrameWidth = stream.ReadUint();
-            frame.FrameHeight = stream.ReadUint();
-            frame.ImageData = stream.ReadBytes((int)(frame.FrameWidth * frame.FrameHeight));
-
-            return frame;
+            return new Frame(type, frameOriginX, frameOriginY, frameWidth, frameHeight, imageData);
         }
 
 
@@ -180,5 +178,16 @@ namespace Shared.Sprites
         public uint FrameWidth { get; set; }
         public uint FrameHeight { get; set; }
         public byte[] ImageData { get; set; }   // frame width * frame height, indexing into palette
+
+
+        public Frame(FrameType type, int frameOriginX, int frameOriginY, uint frameWidth, uint frameHeight, byte[] imageData)
+        {
+            Type = type;
+            FrameOriginX = frameOriginX;
+            FrameOriginY = frameOriginY;
+            FrameWidth = frameWidth;
+            FrameHeight = frameHeight;
+            ImageData = imageData;
+        }
     }
 }

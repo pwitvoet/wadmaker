@@ -8,6 +8,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -30,8 +31,8 @@ namespace SpriteMaker
         public bool ExtractAsGif { get; set; }                  // -gif             extract sprites as (animated) gif files
 
         // Other settings:
-        public string InputPath { get; set; }                   // An image or sprite file, or a directory full of images (or sprites, if -extract is set)
-        public string OutputPath { get; set; }                  // Output sprite or image path, or output directory path
+        public string InputPath { get; set; } = "";             // An image or sprite file, or a directory full of images (or sprites, if -extract is set)
+        public string OutputPath { get; set; } = "";            // Output sprite or image path, or output directory path
 
         public bool DisableFileLogging { get; set; }            // -nologfile       disables logging to a file (parent-directory\spritemaker.log)
     }
@@ -55,7 +56,7 @@ namespace SpriteMaker
     */
     class Program
     {
-        static TextWriter LogFile;
+        static TextWriter? LogFile;
 
 
         static void Main(string[] args)
@@ -70,7 +71,7 @@ namespace SpriteMaker
                 if (!settings.DisableFileLogging)
                 {
                     var logName = Path.GetFileNameWithoutExtension(settings.InputPath);
-                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputPath), $"spritemaker - {logName}.log");
+                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputPath) ?? "", $"spritemaker - {logName}.log");
                     LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
                     LogFile.WriteLine(launchInfo);
                 }
@@ -160,7 +161,7 @@ namespace SpriteMaker
                     else
                     {
                         // By default, put the output images in a '*_extracted' directory next to the input directory:
-                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath), Path.GetFileNameWithoutExtension(settings.InputPath) + "_extracted");
+                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath) ?? "", Path.GetFileNameWithoutExtension(settings.InputPath) + "_extracted");
                     }
                 }
             }
@@ -179,12 +180,12 @@ namespace SpriteMaker
                     if (inputIsFile)
                     {
                         // By default, put the output sprite in the same directory:
-                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath), GetSpriteName(settings.InputPath) + ".spr");
+                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath)!, GetSpriteName(settings.InputPath) + ".spr");
                     }
                     else
                     {
                         // By default, put output sprites in a '*_sprites' directory next to the input directory:
-                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath), Path.GetFileNameWithoutExtension(settings.InputPath) + "_sprites");
+                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath) ?? "", Path.GetFileNameWithoutExtension(settings.InputPath) + "_sprites");
                     }
                 }
             }
@@ -240,7 +241,7 @@ namespace SpriteMaker
             var stopwatch = Stopwatch.StartNew();
 
             // Gather all related files and settings (for animated sprites, it's possible to use multiple frame-numbered images):
-            var inputDirectory = Path.GetDirectoryName(inputPath);
+            var inputDirectory = Path.GetDirectoryName(inputPath)!;
             var spriteName = GetSpriteName(inputPath);
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
             var imagePaths = Directory.EnumerateFiles(inputDirectory)
@@ -587,7 +588,7 @@ namespace SpriteMaker
             var spritesRemoved = 0;
 
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
-            var currentFileHashes = new Dictionary<string, byte[]>();
+            var currentFileHashes = new Dictionary<string, byte[]?>();
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
 
             CreateDirectory(outputDirectory);
@@ -728,7 +729,7 @@ namespace SpriteMaker
             SpriteMakingSettings spriteMakingSettings,
             string conversionOutputDirectory,
             bool forceRebuild,
-            IDictionary<string, byte[]> currentFileHashes = null)
+            IDictionary<string, byte[]?>? currentFileHashes = null)
         {
             try
             {
@@ -763,7 +764,7 @@ namespace SpriteMaker
                 // Read file hashes - these are used to detect filename changes, and will be stored for future change detection:
                 if (currentFileHashes != null)
                 {
-                    var imageFileHashes = imagePaths.ToDictionary(Path.GetFileName, GetFileHash);
+                    var imageFileHashes = imagePaths.ToDictionary(path => Path.GetFileName(path)!, GetFileHash);
                     foreach (var kv in imageFileHashes)
                         currentFileHashes[kv.Key] = kv.Value;
 
@@ -937,21 +938,20 @@ namespace SpriteMaker
                 var image = frameImage.Image;
                 foreach (ImageFrame<Rgba32> frame in image.Frames)
                 {
-                    sprite.Frames.Add(new Frame {
-                        Type = FrameType.Single,
-                        FrameOriginX = -(frame.Width / 2) + (frameImage.Settings.FrameOffset?.X ?? 0),
-                        FrameOriginY = (frame.Height / 2) + (frameImage.Settings.FrameOffset?.Y ?? 0),
-                        FrameWidth = (uint)frame.Width,
-                        FrameHeight = (uint)frame.Height,
-                        ImageData = CreateFrameImageData(
+                    sprite.Frames.Add(new Frame(
+                        FrameType.Single,
+                        -(frame.Width / 2) + (frameImage.Settings.FrameOffset?.X ?? 0),
+                        (frame.Height / 2) + (frameImage.Settings.FrameOffset?.Y ?? 0),
+                        (uint)frame.Width,
+                        (uint)frame.Height,
+                        CreateFrameImageData(
                             frame,
                             palette,
                             colorIndexMappingCache,
                             spriteTextureFormat,
                             frameImage.Settings,
                             MakeTransparencyPredicate(frameImage, spriteTextureFormat == SpriteTextureFormat.AlphaTest),
-                            disableDithering: isAnimatedSprite),
-                    });
+                            disableDithering: isAnimatedSprite)));
                 }
             }
             return sprite;
@@ -1051,7 +1051,7 @@ namespace SpriteMaker
             Func<Rgba32, bool> isTransparent,
             bool disableDithering)
         {
-            Func<Rgba32, int> getColorIndex = null;
+            Func<Rgba32, int> getColorIndex;
             if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
             {
                 disableDithering = true;
@@ -1101,23 +1101,23 @@ namespace SpriteMaker
         static byte[] GetFileHash(string path)
         {
             using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var sha256 = new SHA256Managed())
+            using (var sha256 = SHA256.Create())
                 return sha256.ComputeHash(file);
         }
 
-        static bool IsEqualHash(byte[] hash1, byte[] hash2) => hash1 != null && hash2 != null && Enumerable.SequenceEqual(hash1, hash2);
+        static bool IsEqualHash(byte[]? hash1, byte[]? hash2) => hash1 != null && hash2 != null && Enumerable.SequenceEqual(hash1, hash2);
 
         // TODO: Move this to a common place in Shared -- it's duplicated 3 times now!
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
 
-        static void CreateDirectory(string path)
+        static void CreateDirectory(string? path)
         {
             if (!string.IsNullOrEmpty(path))
                 Directory.CreateDirectory(path);
         }
 
 
-        static void Log(string message)
+        static void Log(string? message)
         {
             Console.WriteLine(message);
             LogFile?.WriteLine(message);

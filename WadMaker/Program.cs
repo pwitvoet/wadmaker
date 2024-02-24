@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Shared.FileFormats;
 using Shared;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WadMaker
 {
@@ -17,18 +18,22 @@ namespace WadMaker
         public bool IncludeSubDirectories { get; set; }     // -subdirs     also include images in sub-directories
 
         // Extract settings:
+        [MemberNotNullWhen(true, nameof(InputFilePath))]
+        [MemberNotNullWhen(true, nameof(OutputDirectory))]
         public bool Extract { get; set; }                   //              Texture extraction mode is enabled when the first argument (path) is a wad or bsp file.
         public bool ExtractMipmaps { get; set; }            // -mipmaps     also extract mipmaps
         public bool OverwriteExistingFiles { get; set; }    // -overwrite   extract mode only, enables overwriting of existing image files (off by default)
 
         // Bsp settings:
+        [MemberNotNullWhen(true, nameof(InputFilePath))]
+        [MemberNotNullWhen(true, nameof(OutputFilePath))]
         public bool RemoveEmbeddedTextures { get; set; }    // -remove      removes embedded textures from the given bsp file
 
         // Other settings:
-        public string InputDirectory { get; set; }          // Build mode only
-        public string InputFilePath { get; set; }           // Wad or bsp path (output in build mode, input in extract mode).
-        public string OutputDirectory { get; set; }         // Extract mode only
-        public string OutputFilePath { get; set; }          // Output bsp path (when removing embedded textures)
+        public string? InputDirectory { get; set; }         // Build mode only
+        public string? InputFilePath { get; set; }          // Wad or bsp path (output in build mode, input in extract mode).
+        public string? OutputDirectory { get; set; }        // Extract mode only
+        public string? OutputFilePath { get; set; }         // Output bsp path (when removing embedded textures)
 
         public bool DisableFileLogging { get; set; }        // -nologfile   disables logging to a file (parent-directory\wadmaker.log)
     }
@@ -36,7 +41,7 @@ namespace WadMaker
     class Program
     {
         static Regex AnimatedTextureNameRegex = new Regex(@"^\+[0-9A-J]");
-        static TextWriter LogFile;
+        static TextWriter? LogFile;
 
 
         static void Main(string[] args)
@@ -51,7 +56,7 @@ namespace WadMaker
                 if (!settings.DisableFileLogging)
                 {
                     var logName = Path.GetFileNameWithoutExtension(settings.InputDirectory ?? settings.InputFilePath);
-                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory ?? settings.InputFilePath), $"wadmaker - {logName}.log");
+                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory ?? settings.InputFilePath) ?? "", $"wadmaker - {logName}.log");
                     LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
                     LogFile.WriteLine(launchInfo);
                 }
@@ -66,7 +71,7 @@ namespace WadMaker
                 }
                 else
                 {
-                    MakeWad(settings.InputDirectory, settings.InputFilePath, settings.FullRebuild, settings.IncludeSubDirectories);
+                    MakeWad(settings.InputDirectory!, settings.OutputFilePath!, settings.FullRebuild, settings.IncludeSubDirectories);
                 }
             }
             catch (Exception ex)
@@ -119,7 +124,7 @@ namespace WadMaker
                 if (index < args.Length)
                     settings.OutputDirectory = args[index++];
                 else
-                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.InputFilePath), Path.GetFileNameWithoutExtension(settings.InputFilePath) + "_extracted");
+                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.InputFilePath)!, Path.GetFileNameWithoutExtension(settings.InputFilePath) + "_extracted");
             }
             else if (settings.RemoveEmbeddedTextures)
             {
@@ -137,12 +142,12 @@ namespace WadMaker
                 settings.InputDirectory = args[index++];
 
                 if (index < args.Length)
-                    settings.InputFilePath = args[index++];
+                    settings.OutputFilePath = args[index++];
                 else
-                    settings.InputFilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
+                    settings.OutputFilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
 
-                if (!Path.IsPathRooted(settings.InputFilePath))
-                    settings.InputFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory), settings.InputFilePath);
+                if (!Path.IsPathRooted(settings.OutputFilePath))
+                    settings.OutputFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory) ?? "", settings.OutputFilePath);
             }
 
             return settings;
@@ -156,8 +161,8 @@ namespace WadMaker
 
             var imageFilesCreated = 0;
 
-            var textures = new List<Texture>();
-            if (inputFilePath.EndsWith(".bsp"))
+            List<Texture> textures;
+            if (inputFilePath.EndsWith(".bsp", StringComparison.InvariantCultureIgnoreCase))
                 textures = Bsp.GetEmbeddedTextures(inputFilePath);
             else
                 textures = Wad.Load(inputFilePath).Textures;
@@ -181,8 +186,11 @@ namespace WadMaker
 
                         using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
                         {
-                            image.SaveAsPng(filePath);
-                            imageFilesCreated += 1;
+                            if (image != null)
+                            {
+                                image.SaveAsPng(filePath);
+                                imageFilesCreated += 1;
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -382,11 +390,14 @@ namespace WadMaker
 
 
         // Wad extraction:
-        static Image<Rgba32> DecalTextureToImage(Texture texture, int mipmap = 0)
+        static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
         {
+            var imageData = texture.GetImageData(mipmap);
+            if (imageData == null)
+                return null;
+
             var width = texture.Width >> mipmap;
             var height = texture.Height >> mipmap;
-            var imageData = texture.GetImageData(mipmap);
             var decalColor = texture.Palette[255];
 
             var image = new Image<Rgba32>(width, height);
@@ -406,11 +417,14 @@ namespace WadMaker
             return image;
         }
 
-        static Image<Rgba32> TextureToImage(Texture texture, int mipmap = 0)
+        static Image<Rgba32>? TextureToImage(Texture texture, int mipmap = 0)
         {
+            var imageData = texture.GetImageData(mipmap);
+            if (imageData == null)
+                return null;
+
             var width = texture.Width >> mipmap;
             var height = texture.Height >> mipmap;
-            var imageData = texture.GetImageData(mipmap);
             var hasColorKey = texture.Name.StartsWith("{");
 
             var image = new Image<Rgba32>(width, height);
@@ -454,7 +468,9 @@ namespace WadMaker
         {
             // Load the main texture image, and any available mipmap images:
             using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
-                .Select(imagePath => File.Exists(imagePath) ? ImageReading.ReadImage(imagePath) : null)))
+                .Select(imagePath => File.Exists(imagePath) ? ImageReading.ReadImage(imagePath) : null)
+                .Where(image => image != null)
+                .Cast<Image<Rgba32>>()))
             {
                 // Verify image sizes:
                 if (images[0].Width % 16 != 0 || images[0].Height % 16 != 0)
@@ -475,7 +491,7 @@ namespace WadMaker
 
                 // Create a suitable palette, taking special texture types into account:
                 var transparencyThreshold = isTransparentTexture ? Clamp(textureSettings.TransparencyThreshold ?? 128, 0, 255) : 0;
-                Func<Rgba32, bool> isTransparentPredicate = null;
+                Func<Rgba32, bool> isTransparentPredicate;
                 if (textureSettings.TransparencyColor != null)
                 {
                     var transparencyColor = textureSettings.TransparencyColor.Value;
@@ -658,14 +674,14 @@ namespace WadMaker
 
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
 
-        static void CreateDirectory(string path)
+        static void CreateDirectory(string? path)
         {
             if (!string.IsNullOrEmpty(path))
                 Directory.CreateDirectory(path);
         }
 
 
-        static void Log(string message)
+        static void Log(string? message)
         {
             Console.WriteLine(message);
             LogFile?.WriteLine(message);

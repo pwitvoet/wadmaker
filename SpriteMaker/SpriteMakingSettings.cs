@@ -3,7 +3,6 @@ using Shared.Sprites;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Globalization;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Web;
 
@@ -40,7 +39,7 @@ namespace SpriteMaker
 
 
         public string Directory { get; }
-        public IReadOnlyDictionary<string, byte[]> FileHashesHistory { get; }
+        public IReadOnlyDictionary<string, byte[]?> FileHashesHistory { get; }
         public IReadOnlyCollection<string> SubDirectoryNamesHistory { get; }
 
         private Dictionary<string, Rule> _exactRules = new Dictionary<string, Rule>();
@@ -85,7 +84,7 @@ namespace SpriteMaker
         /// and previously seen sub-directories. This enables SpriteMaker to detect settings, filename and sub-directory changes, allowing it to only update sprites
         /// whose input files or settings have been modified, and to only remove files and sub-directories that have previously been created by SpriteMaker.
         /// </summary>
-        public void UpdateHistory(IDictionary<string, byte[]> currentFileHashes, HashSet<string> currentSubDirectoryNames)
+        public void UpdateHistory(IDictionary<string, byte[]?> currentFileHashes, HashSet<string> currentSubDirectoryNames)
         {
             var historyFilePath = Path.Combine(Directory, HistoryFilename);
 
@@ -120,7 +119,7 @@ namespace SpriteMaker
             string directory,
             IEnumerable<Rule> currentRules,
             IDictionary<string, Rule> rulesHistory,
-            IDictionary<string, byte[]> fileHashesHistory,
+            IDictionary<string, byte[]?> fileHashesHistory,
             HashSet<string> subDirectoryNamesHistory)
         {
             Directory = directory;
@@ -171,7 +170,7 @@ namespace SpriteMaker
             // First read the history file, which stores the last known state and modification time of each rule,
             // as well as the names and hashes of previously converted files, and the names of previous sub-directories:
             var oldRules = new Dictionary<string, Rule>();
-            var previousFileHashes = new Dictionary<string, byte[]>();
+            var previousFileHashes = new Dictionary<string, byte[]?>();
             var previousSubDirectoryNames = new HashSet<string>();
             if (File.Exists(historyFilePath))
                 (oldRules, previousFileHashes, previousSubDirectoryNames) = ParseHistoryFile(historyFilePath);
@@ -386,10 +385,10 @@ namespace SpriteMaker
             SubDirectories,
         }
 
-        private static (Dictionary<string, Rule> oldRules, Dictionary<string, byte[]> oldFileHashes, HashSet<string> oldSubDirectories) ParseHistoryFile(string path)
+        private static (Dictionary<string, Rule> oldRules, Dictionary<string, byte[]?> oldFileHashes, HashSet<string> oldSubDirectories) ParseHistoryFile(string path)
         {
             var oldRules = new Dictionary<string, Rule>();
-            var oldFileHashes = new Dictionary<string, byte[]>();
+            var oldFileHashes = new Dictionary<string, byte[]?>();
             var oldSubDirectories = new HashSet<string>();
 
             var lines = File.ReadAllLines(path);
@@ -434,7 +433,7 @@ namespace SpriteMaker
             return (oldRules, oldFileHashes, oldSubDirectories);
         }
 
-        private static Rule ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
+        private static Rule? ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
         {
             var tokens = GetTokens(line).ToArray();
             if (tokens.Length == 0 || IsComment(tokens[0]))
@@ -540,7 +539,7 @@ namespace SpriteMaker
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
             }
-            return new Rule(namePattern, isRemoved ? null : (SpriteSettings?)spriteSettings, ruleTimestamp ?? fileTimestamp, isGlobal);
+            return new Rule(namePattern, isRemoved ? null : spriteSettings, ruleTimestamp ?? fileTimestamp, isGlobal);
 
 
             void RequireToken(string value)
@@ -549,7 +548,7 @@ namespace SpriteMaker
                 if (tokens[i++] != value) throw new InvalidDataException($"Expected a '{value}', but found '{tokens[i - 1]}'.");
             }
 
-            T ParseToken<T>(Func<string, T> parse, string label = null)
+            T ParseToken<T>(Func<string, T> parse, string? label = null)
             {
                 if (i >= tokens.Length)
                     throw new InvalidDataException($"Expected a {label ?? typeof(T).ToString()}, but found end of line.");
@@ -558,7 +557,7 @@ namespace SpriteMaker
                 {
                     return parse(tokens[i++]);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     throw new InvalidDataException($"Expected a {label ?? typeof(T).ToString()}, but found '{tokens[i - 1]}'.");
                 }
@@ -663,7 +662,7 @@ namespace SpriteMaker
         }
 
 
-        private static void SaveHistoryFile(string path, Dictionary<string, Rule> oldRules, IDictionary<string, byte[]> oldFileHashes, HashSet<string> oldSubDirectoryNames)
+        private static void SaveHistoryFile(string path, Dictionary<string, Rule> oldRules, IDictionary<string, byte[]?> oldFileHashes, HashSet<string> oldSubDirectoryNames)
         {
             using (var file = File.Create(path))
             using (var writer = new StreamWriter(file))
