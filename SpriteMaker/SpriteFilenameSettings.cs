@@ -1,7 +1,5 @@
 ﻿using Shared.Sprites;
 using SixLabors.ImageSharp;
-using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace SpriteMaker

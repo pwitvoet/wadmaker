@@ -1,9 +1,5 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 
 namespace Shared.FileFormats
 {
@@ -85,14 +81,17 @@ namespace Shared.FileFormats
             var getColor = GetColorFunction(colorMode, channelCount, palette, getValue);
 
             var image = new Image<Rgba32>(width, height);
-            for (int y = 0; y < height; y++)
+            image.ProcessPixelRows(accessor =>
             {
-                var rowSpan = image.GetPixelRowSpan(y);
-                for (int x = 0; x < width; x++)
+                for (int y = 0; y < height; y++)
                 {
-                    rowSpan[x] = getColor(x, y);
+                    var rowSpan = accessor.GetRowSpan(y);
+                    for (int x = 0; x < width; x++)
+                    {
+                        rowSpan[x] = getColor(x, y);
+                    }
                 }
-            }
+            });
             return image;
         }
 

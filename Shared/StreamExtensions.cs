@@ -1,6 +1,4 @@
 ﻿using SixLabors.ImageSharp.PixelFormats;
-using System;
-using System.IO;
 using System.Text;
 
 namespace Shared

@@ -1,8 +1,5 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Shared
 {
@@ -101,22 +98,25 @@ namespace Shared
         /// </summary>
         public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, ImageFrame<Rgba32> imageFrame, Func<Rgba32, bool> ignoreColor)
         {
-            for (int y = 0; y < imageFrame.Height; y++)
+            imageFrame.ProcessPixelRows(accessor =>
             {
-                var rowSpan = imageFrame.GetPixelRowSpan(y);
-                for (int x = 0; x < imageFrame.Width; x++)
+                for (int y = 0; y < imageFrame.Height; y++)
                 {
-                    var color = rowSpan[x];
-                    if (ignoreColor(color))
-                        continue;
+                    var rowSpan = accessor.GetRowSpan(y);
+                    for (int x = 0; x < imageFrame.Width; x++)
+                    {
+                        var color = rowSpan[x];
+                        if (ignoreColor(color))
+                            continue;
 
-                    color.A = 255;  // Ignore alpha
-                    if (!colorHistogram.TryGetValue(color, out var count))
-                        count = 0;
+                        color.A = 255;  // Ignore alpha
+                        if (!colorHistogram.TryGetValue(color, out var count))
+                            count = 0;
 
-                    colorHistogram[color] = count + 1;
+                        colorHistogram[color] = count + 1;
+                    }
                 }
-            }
+            });
         }
 
         /// <summary>

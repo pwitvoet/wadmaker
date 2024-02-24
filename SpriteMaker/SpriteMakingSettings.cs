@@ -2,11 +2,7 @@
 using Shared.Sprites;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -168,7 +164,7 @@ namespace SpriteMaker
         /// </summary>
         public static SpriteMakingSettings Load(string directory)
         {
-            var globalConfigFilePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), ConfigFilename);
+            var globalConfigFilePath = Path.Combine(AppContext.BaseDirectory, ConfigFilename);
             var configFilePath = Path.Combine(directory, ConfigFilename);
             var historyFilePath = Path.Combine(directory, HistoryFilename);
 

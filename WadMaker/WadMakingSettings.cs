@@ -1,9 +1,5 @@
 ﻿using Shared;
 using SixLabors.ImageSharp.PixelFormats;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -124,7 +120,7 @@ namespace WadMaker
         /// </summary>
         public static WadMakingSettings Load(string folder)
         {
-            var globalConfigFilePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), ConfigFilename);
+            var globalConfigFilePath = Path.Combine(AppContext.BaseDirectory, ConfigFilename);
             var configFilePath = Path.Combine(folder, ConfigFilename);
             var historyFilePath = Path.Combine(folder, HistoryFilename);
 

@@ -2,23 +2,15 @@
 using Shared.FileFormats;
 using Shared.Sprites;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using System.Web;
 
 namespace SpriteMaker
 {
@@ -505,7 +497,7 @@ namespace SpriteMaker
                 image.Metadata.GetFormatMetadata(GifFormat.Instance).RepeatCount = 0;
                 image.Save(gifOutputPath, new GifEncoder {
                     ColorTableMode = GifColorTableMode.Global,
-                    GlobalPixelSamplingStrategy = new ExtensivePixelSamplingStrategy(), // TODO: Is this needed??
+                    PixelSamplingStrategy = new ExtensivePixelSamplingStrategy(), // TODO: Is this needed??
                     Quantizer = new PaletteQuantizer(new ReadOnlyMemory<Color>(sprite.Palette.Select(rgba32 => new Color(rgba32)).ToArray()), new QuantizerOptions {
                         MaxColors = 256,
                         Dither = null
@@ -557,15 +549,18 @@ namespace SpriteMaker
                             (textureFormat == SpriteTextureFormat.AlphaTest) ? (Func<byte, Rgba32>)GetAlphaTestColor :
                                                                                (Func<byte, Rgba32>)GetPaletteColor;
 
-            for (int dy = 0; dy < sourceArea.Height; dy++)
+            imageFrame.ProcessPixelRows(accessor =>
             {
-                var rowSpan = imageFrame.GetPixelRowSpan(destinationArea.Y + dy);
-                for (int dx = 0; dx < sourceArea.Width; dx++)
+                for (int dy = 0; dy < sourceArea.Height; dy++)
                 {
-                    var index = spriteFrame.ImageData[(sourceArea.Y + dy) * spriteFrame.FrameWidth + (sourceArea.X + dx)];
-                    rowSpan[destinationArea.X + dx] = getColor(index);
+                    var rowSpan = accessor.GetRowSpan(destinationArea.Y + dy);
+                    for (int dx = 0; dx < sourceArea.Width; dx++)
+                    {
+                        var index = spriteFrame.ImageData[(sourceArea.Y + dy) * spriteFrame.FrameWidth + (sourceArea.X + dx)];
+                        rowSpan[destinationArea.X + dx] = getColor(index);
+                    }
                 }
-            }
+            });
 
 
             Rgba32 GetIndexAlphaColor(byte index)
@@ -1086,15 +1081,18 @@ namespace SpriteMaker
             byte[] ApplyPaletteWithoutDithering()
             {
                 var textureData = new byte[imageFrame.Width * imageFrame.Height];
-                for (int y = 0; y < imageFrame.Height; y++)
+                imageFrame.ProcessPixelRows(accessor =>
                 {
-                    var rowSpan = imageFrame.GetPixelRowSpan(y);
-                    for (int x = 0; x < imageFrame.Width; x++)
+                    for (int y = 0; y < imageFrame.Height; y++)
                     {
-                        var color = rowSpan[x];
-                        textureData[y * imageFrame.Width + x] = (byte)getColorIndex(color);
+                        var rowSpan = accessor.GetRowSpan(y);
+                        for (int x = 0; x < imageFrame.Width; x++)
+                        {
+                            var color = rowSpan[x];
+                            textureData[y * imageFrame.Width + x] = (byte)getColorIndex(color);
+                        }
                     }
-                }
+                });
                 return textureData;
             }
         }

@@ -1,11 +1,7 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -394,15 +390,18 @@ namespace WadMaker
             var decalColor = texture.Palette[255];
 
             var image = new Image<Rgba32>(width, height);
-            for (int y = 0; y < image.Height; y++)
+            image.ProcessPixelRows(accessor =>
             {
-                var rowSpan = image.GetPixelRowSpan(y);
-                for (int x = 0; x < image.Width; x++)
+                for (int y = 0; y < image.Height; y++)
                 {
-                    var paletteIndex = imageData[y * width + x];
-                    rowSpan[x] = new Rgba32(decalColor.R, decalColor.G, decalColor.B, paletteIndex);
+                    var rowSpan = accessor.GetRowSpan(y);
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        var paletteIndex = imageData[y * width + x];
+                        rowSpan[x] = new Rgba32(decalColor.R, decalColor.G, decalColor.B, paletteIndex);
+                    }
                 }
-            }
+            });
 
             return image;
         }
@@ -415,22 +414,25 @@ namespace WadMaker
             var hasColorKey = texture.Name.StartsWith("{");
 
             var image = new Image<Rgba32>(width, height);
-            for (int y = 0; y < image.Height; y++)
+            image.ProcessPixelRows(accessor =>
             {
-                var rowSpan = image.GetPixelRowSpan(y);
-                for (int x = 0; x < image.Width; x++)
+                for (int y = 0; y < image.Height; y++)
                 {
-                    var paletteIndex = imageData[y * width + x];
-                    if (paletteIndex == 255 && hasColorKey)
+                    var rowSpan = accessor.GetRowSpan(y);
+                    for (int x = 0; x < image.Width; x++)
                     {
-                        rowSpan[x] = new Rgba32(0, 0, 0, 0);
-                    }
-                    else
-                    {
-                        rowSpan[x] = texture.Palette[paletteIndex];
+                        var paletteIndex = imageData[y * width + x];
+                        if (paletteIndex == 255 && hasColorKey)
+                        {
+                            rowSpan[x] = new Rgba32(0, 0, 0, 0);
+                        }
+                        else
+                        {
+                            rowSpan[x] = texture.Palette[paletteIndex];
+                        }
                     }
                 }
-            }
+            });
 
             return image;
         }
@@ -593,15 +595,18 @@ namespace WadMaker
                                                                           (Func<Rgba32, byte>)(color => (byte)((color.R + color.G + color.B) / 3));
 
                 var data = new byte[image.Width * image.Height];
-                for (int y = 0; y < image.Height; y++)
+                image.ProcessPixelRows(accessor =>
                 {
-                    var rowSpan = image.GetPixelRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
+                    for (int y = 0; y < image.Height; y++)
                     {
-                        var color = rowSpan[x];
-                        data[y * image.Width + x] = getPaletteIndex(color);
+                        var rowSpan = accessor.GetRowSpan(y);
+                        for (int x = 0; x < image.Width; x++)
+                        {
+                            var color = rowSpan[x];
+                            data[y * image.Width + x] = getPaletteIndex(color);
+                        }
                     }
-                }
+                });
                 return data;
             }
         }
@@ -635,15 +640,18 @@ namespace WadMaker
             byte[] ApplyPaletteWithoutDithering()
             {
                 var textureData = new byte[image.Width * image.Height];
-                for (int y = 0; y < image.Height; y++)
+                image.ProcessPixelRows(accessor =>
                 {
-                    var rowSpan = image.GetPixelRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
+                    for (int y = 0; y < image.Height; y++)
                     {
-                        var color = rowSpan[x];
-                        textureData[y * image.Width + x] = (byte)getColorIndex(color);
+                        var rowSpan = accessor.GetRowSpan(y);
+                        for (int x = 0; x < image.Width; x++)
+                        {
+                            var color = rowSpan[x];
+                            textureData[y * image.Width + x] = (byte)getColorIndex(color);
+                        }
                     }
-                }
+                });
                 return textureData;
             }
         }

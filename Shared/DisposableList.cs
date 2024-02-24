@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Shared
+﻿namespace Shared
 {
     /// <summary>
     /// A list of disposable items. Disposing this list will dispose and remove its contents.
