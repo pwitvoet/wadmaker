@@ -467,18 +467,20 @@ namespace WadMaker
         static Texture CreateTextureFromImage(string path, string textureName, TextureSettings textureSettings, bool isDecalsWad)
         {
             // Load the main texture image, and any available mipmap images:
-            using (var images = new DisposableList<Image<Rgba32>>(GetMipmapFilePaths(path).Prepend(path)
-                .Select(imagePath => File.Exists(imagePath) ? ImageReading.ReadImage(imagePath) : null)
-                .Where(image => image != null)
-                .Cast<Image<Rgba32>>()))
+            using (var images = new DisposableList<Image<Rgba32>?>(GetMipmapFilePaths(path).Prepend(path)
+                .Select(imagePath => File.Exists(imagePath) ? ImageReading.ReadImage(imagePath) : null)))
             {
                 // Verify image sizes:
-                if (images[0].Width % 16 != 0 || images[0].Height % 16 != 0)
+                var mainImage = images[0]!;
+                if (mainImage.Width % 16 != 0 || mainImage.Height % 16 != 0)
                     throw new InvalidDataException($"Texture '{path}' width or height is not a multiple of 16.");
 
                 for (int i = 1; i < images.Count; i++)
-                    if (images[i] != null && (images[i].Width != images[0].Width >> i || images[i].Height != images[0].Height >> i))
+                {
+                    var mipmapImage = images[i];
+                    if (mipmapImage != null && (mipmapImage.Width != mainImage.Width >> i || mipmapImage.Height != mainImage.Height >> i))
                         throw new InvalidDataException($"Mipmap {i} for texture '{path}' width or height does not match texture size.");
+                }
 
                 if (isDecalsWad)
                     return CreateDecalTexture(textureName, images.ToArray(), textureSettings);
@@ -502,7 +504,7 @@ namespace WadMaker
                     isTransparentPredicate = color => color.A < transparencyThreshold;
                 }
 
-                var colorHistogram = ColorQuantization.GetColorHistogram(images.Where(image => image != null), isTransparentPredicate);
+                var colorHistogram = ColorQuantization.GetColorHistogram(images.Where(image => image != null)!, isTransparentPredicate);
                 var maxColors = 256 - (isTransparentTexture ? 1 : 0) - (isWaterTexture ? 2 : 0);
                 var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
 
@@ -553,18 +555,18 @@ namespace WadMaker
                 for (int i = 1; i < images.Count; i++)
                 {
                     if (images[i] == null)
-                        images[i] = images[0].Clone(context => context.Resize(images[0].Width >> i, images[0].Height >> i));
+                        images[i] = mainImage.Clone(context => context.Resize(mainImage.Width >> i, mainImage.Height >> i));
                 }
 
                 // Create texture data:
                 var textureData = images
-                    .Select(image => CreateTextureData(image, palette, colorIndexMappingCache, textureSettings, isTransparentPredicate, disableDithering: isAnimatedTexture))
+                    .Select(image => CreateTextureData(image!, palette, colorIndexMappingCache, textureSettings, isTransparentPredicate, disableDithering: isAnimatedTexture))
                     .ToArray();
 
                 return Texture.CreateMipmapTexture(
                     name: textureName,
-                    width: images[0].Width,
-                    height: images[0].Height,
+                    width: mainImage.Width,
+                    height: mainImage.Height,
                     imageData: textureData[0],
                     palette: palette,
                     mipmap1Data: textureData[1],
@@ -573,30 +575,31 @@ namespace WadMaker
             }
         }
 
-        static Texture CreateDecalTexture(string name, Image<Rgba32>[] images, TextureSettings textureSettings)
+        static Texture CreateDecalTexture(string name, Image<Rgba32>?[] images, TextureSettings textureSettings)
         {
             // Create any missing mipmaps (this does not affect the palette, so it can be done up-front):
+            var mainImage = images[0]!;
             for (int i = 1; i < images.Length; i++)
             {
                 if (images[i] == null)
-                    images[i] = images[0].Clone(context => context.Resize(images[0].Width >> i, images[0].Height >> i));
+                    images[i] = mainImage.Clone(context => context.Resize(mainImage.Width >> i, mainImage.Height >> i));
             }
 
             // The last palette color determines the color of the decal. All other colors are irrelevant - palette indexes are treated as alpha values instead.
-            var decalColor = textureSettings.DecalColor ?? ColorQuantization.GetAverageColor(ColorQuantization.GetColorHistogram(images, color => color.A == 0));
+            var decalColor = textureSettings.DecalColor ?? ColorQuantization.GetAverageColor(ColorQuantization.GetColorHistogram(images!, color => color.A == 0));
             var palette = Enumerable.Range(0, 255)
                 .Select(i => new Rgba32((byte)i, (byte)i, (byte)i))
                 .Append(decalColor)
                 .ToArray();
 
             var textureData = images
-                .Select(CreateDecalTextureData)
+                .Select(CreateDecalTextureData!)
                 .ToArray();
 
             return Texture.CreateMipmapTexture(
                 name: name,
-                width: images[0].Width,
-                height: images[0].Height,
+                width: mainImage.Width,
+                height: mainImage.Height,
                 imageData: textureData[0],
                 palette: palette,
                 mipmap1Data: textureData[1],
