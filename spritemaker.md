@@ -4,7 +4,6 @@
 ## Table of contents
 - [Overview](#overview)
     - [Intended workflow](#intended-workflow)
-    - [Requirements](#requirements)
 - [How to use](#how-to-use)
     - [Basic usage](#basic-usage)
     - [Advanced options](#advanced-options)
@@ -30,9 +29,6 @@ SpriteMaker accepts image files (png, jpg, gif, bmp, tga), Photoshop files (psd,
 Existing workflows sometimes involve a lot of steps, such as exporting or converting images to an 8-bit indexed format, manually creating a palette and applying it to multiple frames, marking transparent areas with special colors, opening a GUI tool, dragging images into it, then saving the modified sprites, and so on.
 
 SpriteMaker aims to simplify this. Dragging a directory onto SpriteMaker or running a single batch file should be enough to convert all images in a directory to sprites. No exporting or converting, no palette adjustments, no clicking around in a GUI tool. Just modify some images, run a batch file, and go.
-
-### Requirements
-SpriteMaker requires .NET Framework 4.7.2 or higher. If you're using an up-to-date Windows 10 then you're ready to go. If you're using Windows 7 or 8 then you may need to [download .NET Framework from Microsoft's website](https://dotnet.microsoft.com/download/dotnet-framework).
 
 ## How to use
 ### Basic usage
