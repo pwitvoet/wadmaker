@@ -8,7 +8,6 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -44,16 +43,6 @@ namespace SpriteMaker
         Gif,
     }
 
-    /*
-    Usage:
-
-    SpriteMaker.exe input (output)
-        If output is not specified, then it will be set to a value that depends on the input and the kind of input.
-        If input is:
-        - a sprite file: SpriteMaker will 'extract' the sprite file into a png file (or files, for multi-frame pngs, depending on command-line option -nospritesheet)
-        - an image file: SpriteMaker will turn it into a sprite (if image name contains a .N part, then all related frame images are also used to create a multi-frame sprite)
-        - a directory: SpriteMaker will turn all images in the folder into sprites (unless the -extract command-line option is specified, then it'll create images from all sprite files)
-    */
     class Program
     {
         static TextWriter? LogFile;
@@ -89,7 +78,7 @@ namespace SpriteMaker
                 }
                 else
                 {
-                    if (!string.IsNullOrEmpty(Path.GetExtension(settings.InputPath)))
+                    if (File.Exists(settings.InputPath))
                         MakeSingleSprite(settings.InputPath, settings.OutputPath);
                     else
                         MakeSprites(settings.InputPath, settings.OutputPath, settings.FullRebuild, settings.IncludeSubDirectories, settings.EnableSubDirectoryRemoval);
@@ -134,7 +123,7 @@ namespace SpriteMaker
             if (paths.Length == 0)
                 throw new ArgumentException("Missing input path (image or sprite file, or folder) argument.");
 
-            if (paths[0].EndsWith(".spr"))
+            if (File.Exists(paths[0]) && Path.GetExtension(paths[0]).ToLowerInvariant() == ".spr")
                 settings.Extract = true;
 
 
@@ -176,7 +165,7 @@ namespace SpriteMaker
                 }
                 else
                 {
-                    var inputIsFile = !string.IsNullOrEmpty(Path.GetExtension(settings.InputPath));
+                    var inputIsFile = File.Exists(settings.InputPath);
                     if (inputIsFile)
                     {
                         // By default, put the output sprite in the same directory:

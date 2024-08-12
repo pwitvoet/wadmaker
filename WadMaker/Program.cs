@@ -112,8 +112,12 @@ namespace WadMaker
             if (paths.Length == 0)
                 throw new ArgumentException("Missing input folder (for wad building) or file (for texture extraction) argument.");
 
-            if (paths[0].EndsWith(".wad") || (paths[0].EndsWith(".bsp") && !settings.RemoveEmbeddedTextures))
-                settings.Extract = true;
+            if (File.Exists(paths[0]))
+            {
+                var extension = Path.GetExtension(paths[0]).ToLowerInvariant();
+                if (extension == ".wad" || (extension == ".bsp" && !settings.RemoveEmbeddedTextures))
+                    settings.Extract = true;
+            }
 
 
             if (settings.Extract)
