@@ -223,6 +223,16 @@ namespace WadMaker
 
         static void MakeWad(string inputDirectory, string outputWadFilePath, bool fullRebuild, bool includeSubDirectories)
         {
+            if (!Directory.Exists(inputDirectory))
+            {
+                if (File.Exists(inputDirectory))
+                    Log($"ERROR: input must be a directory, not a file.");
+                else
+                    Log($"ERROR: input directory '{inputDirectory}' does not exist.");
+
+                return;
+            }
+
             var stopwatch = Stopwatch.StartNew();
 
             var texturesAdded = 0;
