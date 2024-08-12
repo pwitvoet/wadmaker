@@ -25,7 +25,11 @@ namespace Shared
             var textures = new List<Texture>();
             for (int i = 0; i < textureOffsets.Length; i++)
             {
-                stream.Seek(textureLumpOffset + textureOffsets[i], SeekOrigin.Begin);
+                var textureOffset = textureOffsets[i];
+                if (textureOffset < 0)
+                    continue;
+
+                stream.Seek(textureLumpOffset + textureOffset, SeekOrigin.Begin);
                 var texture = ReadTexture(stream);
                 if (texture.ImageData == null)
                     continue;
@@ -69,7 +73,14 @@ namespace Shared
 
                 for (int i = 0; i < textureOffsets.Length; i++)
                 {
-                    texturesLumpstream.Seek(textureOffsets[i], SeekOrigin.Begin);
+                    var textureOffset = textureOffsets[i];
+                    if (textureOffset < 0)
+                    {
+                        bspTextures[i] = new BspTexture { Name = "" };
+                        continue;
+                    }
+
+                    texturesLumpstream.Seek(textureOffset, SeekOrigin.Begin);
                     var bspTexture = ReadTexture(texturesLumpstream);
                     if (bspTexture.IsEmbedded)
                     {
