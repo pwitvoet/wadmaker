@@ -166,10 +166,10 @@ namespace WadMaker
             var imageFilesCreated = 0;
 
             List<Texture> textures;
-            if (inputFilePath.EndsWith(".bsp", StringComparison.InvariantCultureIgnoreCase))
+            if (Path.GetExtension(inputFilePath).ToLowerInvariant() == ".bsp")
                 textures = Bsp.GetEmbeddedTextures(inputFilePath);
             else
-                textures = Wad.Load(inputFilePath).Textures;
+                textures = LoadWad(inputFilePath).Textures;
 
             CreateDirectory(outputDirectory);
 
@@ -231,7 +231,7 @@ namespace WadMaker
 
             var wadMakingSettings = WadMakingSettings.Load(inputDirectory);
             var updateExistingWad = !fullRebuild && File.Exists(outputWadFilePath);
-            var wad = updateExistingWad ? Wad.Load(outputWadFilePath) : new Wad();
+            var wad = updateExistingWad ? LoadWad(outputWadFilePath) : new Wad();
             var lastWadUpdateTime = updateExistingWad ? new FileInfo(outputWadFilePath).LastWriteTimeUtc : (DateTime?)null;
             var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
@@ -680,6 +680,9 @@ namespace WadMaker
         }
 
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
+
+        static Wad LoadWad(string filePath)
+            => Wad.Load(filePath, (index, name, exception) => Log($"Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
 
         static void CreateDirectory(string? path)
         {

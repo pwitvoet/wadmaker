@@ -45,13 +45,13 @@
         }
 
 
-        public static Wad Load(string path)
+        public static Wad Load(string path, Action<int, string, Exception>? errorCallback = null)
         {
             using (var file = File.OpenRead(path))
-                return Load(file);
+                return Load(file, errorCallback);
         }
 
-        public static Wad Load(Stream stream)
+        public static Wad Load(Stream stream, Action<int, string, Exception>? errorCallback = null)
         {
             var wad = new Wad();
 
@@ -67,8 +67,20 @@
                 .Select(i => ReadLump(stream))
                 .ToArray();
 
-            foreach (var lump in lumps)
-                wad.Textures.Add(ReadTexture(stream, lump));
+            for (int i = 0; i < lumps.Length; i++)
+            {
+                try
+                {
+                    wad.Textures.Add(ReadTexture(stream, lumps[i]));
+                }
+                catch (Exception ex)
+                {
+                    if (errorCallback == null)
+                        throw;
+
+                    errorCallback(i, lumps[i].Name, ex);
+                }
+            }
 
             return wad;
         }
