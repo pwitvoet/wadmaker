@@ -217,7 +217,7 @@ namespace WadMaker
         {
             var stopwatch = Stopwatch.StartNew();
 
-            if (!bspFilePath.EndsWith(".bsp"))
+            if (Path.GetExtension(bspFilePath).ToLowerInvariant() != ".bsp")
                 throw new InvalidUsageException("Removing embedded textures requires a .bsp file.");
 
             Log($"Removing embedded textures from '{bspFilePath}' and saving the result to '{outputFilePath}'.");
