@@ -260,9 +260,13 @@ namespace WadMaker
                 .Where(path => !ExternalConversion.IsConversionOutputDirectory(path))
                 .ToHashSet();
             var textureImagePaths = allInputDirectoryFiles
-                .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).settings.Converter != null)
-                .Where(path => !path.Contains(".mipmap"))
                 .Where(path => !WadMakingSettings.IsConfigurationFile(path))
+                .Where(path =>
+                {
+                    var settings = wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).settings;
+                    return settings.Ignore != true && (ImageReading.IsSupported(path) || settings.Converter != null);
+                })
+                .Where(path => !path.Contains(".mipmap"))
                 .GroupBy(path => WadMakingSettings.GetTextureName(path));
 
             // Check for new and updated images:

@@ -59,6 +59,7 @@ namespace WadMaker
                     if (ruleSettings.DecalColor != null)                textureSettings.DecalColor = ruleSettings.DecalColor;
                     if (ruleSettings.Converter != null)                 textureSettings.Converter = ruleSettings.Converter;
                     if (ruleSettings.ConverterArguments != null)        textureSettings.ConverterArguments = ruleSettings.ConverterArguments;
+                    if (ruleSettings.Ignore != null)                    textureSettings.Ignore = ruleSettings.Ignore;
                 }
 
                 if (rule.LastModified > timestamp)
@@ -257,6 +258,7 @@ namespace WadMaker
         const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
         const string GlobalKey = "global";
+        const string IgnoreKey = "ignore";
 
 
         private static Rule? ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
@@ -349,6 +351,11 @@ namespace WadMaker
                         RequireToken(":");
                         textureSettings.ConverterArguments = ParseToken(s => s, "converter arguments string");
                         ExternalConversion.ThrowIfArgumentsAreInvalid(textureSettings.ConverterArguments);
+                        break;
+
+                    case IgnoreKey:
+                        RequireToken(":");
+                        textureSettings.Ignore = ParseToken(bool.Parse);
                         break;
 
                     default:
@@ -473,6 +480,7 @@ namespace WadMaker
                         if (settings.DecalColor != null) writer.Write($" {DecalColorKey}: {Serialize(settings.DecalColor.Value, false)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
+                        if (settings.Ignore != null) writer.Write($" {IgnoreKey}: {settings.Ignore}");
 
                         if (rule.IsGlobal) writer.Write($" {GlobalKey}");
                     }

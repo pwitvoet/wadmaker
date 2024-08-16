@@ -246,9 +246,13 @@ namespace SpriteMaker
             var spriteName = SpriteMakingSettings.GetSpriteName(inputPath);
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
             var imagePaths = Directory.EnumerateFiles(inputDirectory)
-                .Where(path => SpriteMakingSettings.GetSpriteName(path) == spriteName)
-                .Where(path => ImageReading.IsSupported(path) || spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
+                .Where(path => SpriteMakingSettings.GetSpriteName(path) == spriteName)
+                .Where(path =>
+                {
+                    var settings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings;
+                    return settings.Ignore != true && (ImageReading.IsSupported(path) || settings.Converter != null);
+                })
                 .ToArray();
 
             var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
@@ -598,8 +602,12 @@ namespace SpriteMaker
             // We'll group files by sprite name, to make these collisions easy to detect:
             var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*").ToHashSet();
             var spriteImagePaths = allInputDirectoryFiles
-                .Where(path => ImageReading.IsSupported(path) || spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
+                .Where(path =>
+                {
+                    var settings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings;
+                    return settings.Ignore != true && (ImageReading.IsSupported(path) || settings.Converter != null);
+                })
                 .GroupBy(path => SpriteMakingSettings.GetSpriteName(path));
 
             try

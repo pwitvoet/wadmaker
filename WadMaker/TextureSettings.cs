@@ -16,6 +16,12 @@ namespace WadMaker
     struct TextureSettings
     {
         /// <summary>
+        /// When true, the source image(s) are ignored - as if they don't exist.
+        /// </summary>
+        public bool? Ignore { get; set; }
+
+
+        /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed texture.
         /// Defaults to <see cref="DitheringAlgorithm.FloydSteinberg"/> for normal textures,
         /// and to <see cref="DitheringAlgorithm.None"/> for animated textures (to prevent 'flickering' animations).

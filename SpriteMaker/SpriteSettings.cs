@@ -19,6 +19,12 @@ namespace SpriteMaker
     struct SpriteSettings
     {
         /// <summary>
+        /// When true, the source image(s) are ignored - as if they don't exist.
+        /// </summary>
+        public bool? Ignore { get; set; }
+
+
+        /// <summary>
         /// The sprite's type. Defaults to <see cref="SpriteType.Parallel"/>.
         /// This can be set by adding a specific suffix to a source image filename:
         /// <list type="bullet">

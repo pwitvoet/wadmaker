@@ -60,17 +60,18 @@ namespace SpriteMaker
                 if (rule.SpriteSettings is SpriteSettings ruleSettings)
                 {
                     // More specific rules override settings defined by less specific rules:
-                    if (ruleSettings.SpriteType != null) spriteSettings.SpriteType = ruleSettings.SpriteType;
-                    if (ruleSettings.SpriteTextureFormat != null) spriteSettings.SpriteTextureFormat = ruleSettings.SpriteTextureFormat;
-                    if (ruleSettings.FrameOffset != null) spriteSettings.FrameOffset = ruleSettings.FrameOffset;
-                    if (ruleSettings.DitheringAlgorithm != null) spriteSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
-                    if (ruleSettings.DitherScale != null) spriteSettings.DitherScale = ruleSettings.DitherScale;
-                    if (ruleSettings.AlphaTestTransparencyThreshold != null) spriteSettings.AlphaTestTransparencyThreshold = ruleSettings.AlphaTestTransparencyThreshold;
-                    if (ruleSettings.AlphaTestTransparencyColor != null) spriteSettings.AlphaTestTransparencyColor = ruleSettings.AlphaTestTransparencyColor;
-                    if (ruleSettings.IndexAlphaTransparencySource != null) spriteSettings.IndexAlphaTransparencySource = ruleSettings.IndexAlphaTransparencySource;
-                    if (ruleSettings.IndexAlphaColor != null) spriteSettings.IndexAlphaColor = ruleSettings.IndexAlphaColor;
-                    if (ruleSettings.Converter != null) spriteSettings.Converter = ruleSettings.Converter;
-                    if (ruleSettings.ConverterArguments != null) spriteSettings.ConverterArguments = ruleSettings.ConverterArguments;
+                    if (ruleSettings.SpriteType != null)                        spriteSettings.SpriteType = ruleSettings.SpriteType;
+                    if (ruleSettings.SpriteTextureFormat != null)               spriteSettings.SpriteTextureFormat = ruleSettings.SpriteTextureFormat;
+                    if (ruleSettings.FrameOffset != null)                       spriteSettings.FrameOffset = ruleSettings.FrameOffset;
+                    if (ruleSettings.DitheringAlgorithm != null)                spriteSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
+                    if (ruleSettings.DitherScale != null)                       spriteSettings.DitherScale = ruleSettings.DitherScale;
+                    if (ruleSettings.AlphaTestTransparencyThreshold != null)    spriteSettings.AlphaTestTransparencyThreshold = ruleSettings.AlphaTestTransparencyThreshold;
+                    if (ruleSettings.AlphaTestTransparencyColor != null)        spriteSettings.AlphaTestTransparencyColor = ruleSettings.AlphaTestTransparencyColor;
+                    if (ruleSettings.IndexAlphaTransparencySource != null)      spriteSettings.IndexAlphaTransparencySource = ruleSettings.IndexAlphaTransparencySource;
+                    if (ruleSettings.IndexAlphaColor != null)                   spriteSettings.IndexAlphaColor = ruleSettings.IndexAlphaColor;
+                    if (ruleSettings.Converter != null)                         spriteSettings.Converter = ruleSettings.Converter;
+                    if (ruleSettings.ConverterArguments != null)                spriteSettings.ConverterArguments = ruleSettings.ConverterArguments;
+                    if (ruleSettings.Ignore != null)                            spriteSettings.Ignore = ruleSettings.Ignore;
                 }
 
                 if (rule.LastModified > timestamp)
@@ -387,6 +388,7 @@ namespace SpriteMaker
         const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
         const string GlobalKey = "global";
+        const string IgnoreKey = "ignore";
 
 
         const string TimestampsSegmentHeader = "RULE TIMESTAMPS:";
@@ -551,6 +553,11 @@ namespace SpriteMaker
                         ExternalConversion.ThrowIfArgumentsAreInvalid(spriteSettings.ConverterArguments);
                         break;
 
+                    case IgnoreKey:
+                        RequireToken(":");
+                        spriteSettings.Ignore = ParseToken(bool.Parse);
+                        break;
+
                     default:
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
@@ -703,6 +710,7 @@ namespace SpriteMaker
                         if (settings.IndexAlphaColor != null) writer.Write($" {IndexAlphaColorKey}: {Serialize(settings.IndexAlphaColor.Value)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
+                        if (settings.Ignore != null) writer.Write($" {IgnoreKey}: {settings.Ignore}");
 
                         if (rule.IsGlobal) writer.Write($" {GlobalKey}");
                     }
