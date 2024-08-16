@@ -67,16 +67,32 @@ namespace WadMaker
             return (textureSettings, timestamp);
         }
 
+        /// <summary>
+        /// Returns the texture name for the given file path.
+        /// This is the first part of the filename, up to the first dot (.).
+        /// </summary>
+        public static string GetTextureName(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+
+            var dotIndex = name.IndexOf('.');
+            if (dotIndex >= 0)
+                name = name.Substring(0, dotIndex);
+
+            return name.ToLowerInvariant();
+        }
+
         // Returns all rules that match the given filename, from least to most specific.
         private IEnumerable<Rule> GetMatchingRules(string filename)
         {
             filename = filename.ToLowerInvariant();
+            var textureName = GetTextureName(filename);
 
             foreach ((var regex, var wildcardRule) in _wildcardRules)
                 if (regex.IsMatch(filename))
                     yield return wildcardRule;
 
-            if (_exactRules.TryGetValue(filename, out var rule))
+            if (_exactRules.TryGetValue(filename, out var rule) || _exactRules.TryGetValue(textureName, out rule))
                 yield return rule;
         }
 

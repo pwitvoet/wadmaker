@@ -80,6 +80,21 @@ namespace SpriteMaker
         }
 
         /// <summary>
+        /// Returns the sprite name for the given file path.
+        /// This is the first part of the filename, up to the first dot (.).
+        /// </summary>
+        public static string GetSpriteName(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+
+            var dotIndex = name.IndexOf('.');
+            if (dotIndex >= 0)
+                name = name.Substring(0, dotIndex);
+
+            return name.ToLowerInvariant();
+        }
+
+        /// <summary>
         /// Updates the history file (spritemaker.dat), which stores a condensed history of the spritemaker.config settings, previously seen files and content hashes,
         /// and previously seen sub-directories. This enables SpriteMaker to detect settings, filename and sub-directory changes, allowing it to only update sprites
         /// whose input files or settings have been modified, and to only remove files and sub-directories that have previously been created by SpriteMaker.
@@ -105,12 +120,13 @@ namespace SpriteMaker
         private IEnumerable<Rule> GetMatchingRules(string filename)
         {
             filename = filename.ToLowerInvariant();
+            var spriteName = GetSpriteName(filename);
 
             foreach ((var regex, var wildcardRule) in _wildcardRules)
                 if (regex.IsMatch(filename))
                     yield return wildcardRule;
 
-            if (_exactRules.TryGetValue(filename, out var rule))
+            if (_exactRules.TryGetValue(filename, out var rule) || _exactRules.TryGetValue(spriteName, out rule))
                 yield return rule;
         }
 

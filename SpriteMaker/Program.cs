@@ -173,7 +173,7 @@ namespace SpriteMaker
                     if (inputIsFile)
                     {
                         // By default, put the output sprite in the same directory:
-                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath)!, GetSpriteName(settings.InputPath) + ".spr");
+                        settings.OutputPath = Path.Combine(Path.GetDirectoryName(settings.InputPath)!, SpriteMakingSettings.GetSpriteName(settings.InputPath) + ".spr");
                     }
                     else
                     {
@@ -243,10 +243,10 @@ namespace SpriteMaker
 
             // Gather all related files and settings (for animated sprites, it's possible to use multiple frame-numbered images):
             var inputDirectory = Path.GetDirectoryName(inputPath)!;
-            var spriteName = GetSpriteName(inputPath);
+            var spriteName = SpriteMakingSettings.GetSpriteName(inputPath);
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
             var imagePaths = Directory.EnumerateFiles(inputDirectory)
-                .Where(path => GetSpriteName(path) == spriteName)
+                .Where(path => SpriteMakingSettings.GetSpriteName(path) == spriteName)
                 .Where(path => ImageReading.IsSupported(path) || spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
                 .ToArray();
@@ -600,7 +600,7 @@ namespace SpriteMaker
             var spriteImagePaths = allInputDirectoryFiles
                 .Where(path => ImageReading.IsSupported(path) || spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
-                .GroupBy(path => GetSpriteName(path));
+                .GroupBy(path => SpriteMakingSettings.GetSpriteName(path));
 
             try
             {
@@ -638,7 +638,7 @@ namespace SpriteMaker
 
                 // Remove sprites whose source images have been removed:
                 var oldSpriteNames = spriteMakingSettings.FileHashesHistory
-                    .Select(kv => GetSpriteName(kv.Key))
+                    .Select(kv => SpriteMakingSettings.GetSpriteName(kv.Key))
                     .ToHashSet();
                 var newSpriteNames = spriteImagePaths
                     .Select(group => group.Key)
@@ -739,7 +739,7 @@ namespace SpriteMaker
                     {
                         var isSupportedFileType = ImageReading.IsSupported(path);
                         var filenameSettings = SpriteFilenameSettings.FromFilename(path);
-                        var spriteSettings = spriteMakingSettings.GetSpriteSettings(isSupportedFileType ? spriteName : Path.GetFileName(path));
+                        var spriteSettings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path));
 
                         // Filename settings take priority over config files:
                         if (filenameSettings.Type != null)          spriteSettings.settings.SpriteType = filenameSettings.Type;
@@ -896,17 +896,6 @@ namespace SpriteMaker
             }
 
             return spritesRemoved;
-        }
-
-        static string GetSpriteName(string path)
-        {
-            var name = Path.GetFileNameWithoutExtension(path);
-
-            var dotIndex = name.IndexOf('.');
-            if (dotIndex >= 0)
-                name = name.Substring(0, dotIndex);
-
-            return name.ToLowerInvariant();
         }
 
         static Image<Rgba32>[] GetSpritesheetTiles(Image<Rgba32> spritesheet, Size tileSize)

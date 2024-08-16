@@ -263,7 +263,7 @@ namespace WadMaker
                 .Where(path => ImageReading.IsSupported(path) || wadMakingSettings.GetTextureSettings(Path.GetFileName(path)).settings.Converter != null)
                 .Where(path => !path.Contains(".mipmap"))
                 .Where(path => !WadMakingSettings.IsConfigurationFile(path))
-                .GroupBy(path => GetTextureName(path));
+                .GroupBy(path => WadMakingSettings.GetTextureName(path));
 
             // Check for new and updated images:
             try
@@ -290,11 +290,9 @@ namespace WadMaker
 
 
                     var filePath = imagePathsGroup.Single();
-                    var isExistingImage = wadTextureNames.Contains(textureName.ToLowerInvariant());
-                    var isSupportedFileType = ImageReading.IsSupported(filePath);
+                    (var textureSettings, var lastSettingsChangeTime) = wadMakingSettings.GetTextureSettings(Path.GetFileName(filePath));
 
-                    // For files that are not directly supported, we'll include their extension when looking up conversion settings:
-                    (var textureSettings, var lastSettingsChangeTime) = wadMakingSettings.GetTextureSettings(isSupportedFileType ? textureName : Path.GetFileName(filePath));
+                    var isExistingImage = wadTextureNames.Contains(textureName.ToLowerInvariant());
                     if (isExistingImage && updateExistingWad)
                     {
                         // NOTE: A texture will not be rebuilt if one of its mipmap files has been removed. In order to detect such cases,
@@ -482,8 +480,6 @@ namespace WadMaker
         // Wad making:
         // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, parenthesis, etc.?)
         static bool IsValidTextureName(string name) => name.All(c => c > 0 && c < 256 && c != ' ');
-
-        static string GetTextureName(string path)=> Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
 
         static IEnumerable<string> GetMipmapFilePaths(string path)
         {
