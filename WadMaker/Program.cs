@@ -74,9 +74,13 @@ namespace WadMaker
                     MakeWad(settings.InputDirectory!, settings.OutputFilePath!, settings.FullRebuild, settings.IncludeSubDirectories);
                 }
             }
+            catch (InvalidUsageException ex)
+            {
+                Log($"ERROR: {ex.Message}");
+            }
             catch (Exception ex)
             {
-                Log($"Error: {ex.GetType().Name}: '{ex.Message}'.");
+                Log($"ERROR: {ex.GetType().Name}: '{ex.Message}'.");
                 Log(ex.StackTrace);
             }
             finally
@@ -103,14 +107,14 @@ namespace WadMaker
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
                     case "-remove": settings.RemoveEmbeddedTextures = true; break;
                     case "-nologfile": settings.DisableFileLogging = true; break;
-                    default: throw new ArgumentException($"Unknown argument: '{arg}'.");
+                    default: throw new InvalidUsageException($"Unknown argument: '{arg}'.");
                 }
             }
 
             // Then handle arguments (paths):
             var paths = args.Skip(index).ToArray();
             if (paths.Length == 0)
-                throw new ArgumentException("Missing input folder (for wad building) or file (for texture extraction) argument.");
+                throw new InvalidUsageException("Missing input folder (for wad building) or file (for texture extraction) argument.");
 
             if (File.Exists(paths[0]))
             {
@@ -163,6 +167,8 @@ namespace WadMaker
         {
             var stopwatch = Stopwatch.StartNew();
 
+            Log($"Extracting textures from '{inputFilePath}' and saving the result to '{outputDirectory}'.");
+
             var imageFilesCreated = 0;
 
             List<Texture> textures;
@@ -184,7 +190,7 @@ namespace WadMaker
                         var filePath = Path.Combine(outputDirectory, texture.Name + $"{(mipmap > 0 ? ".mipmap" + mipmap : "")}.png");
                         if (!overwriteExistingFiles && File.Exists(filePath))
                         {
-                            Log($"WARNING: {filePath} already exist. Skipping texture.");
+                            Log($"- WARNING: '{filePath}' already exist. Skipping texture.");
                             continue;
                         }
 
@@ -199,12 +205,12 @@ namespace WadMaker
                     }
                     catch (Exception ex)
                     {
-                        Log($"ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
+                        Log($"- ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
                     }
                 }
             }
 
-            Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from {inputFilePath} to {outputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from '{inputFilePath}' to '{outputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         static void RemoveEmbeddedTextures(string bspFilePath, string outputFilePath)
@@ -212,13 +218,13 @@ namespace WadMaker
             var stopwatch = Stopwatch.StartNew();
 
             if (!bspFilePath.EndsWith(".bsp"))
-                throw new ArgumentException("Removing embedded textures requires a .bsp file.");
+                throw new InvalidUsageException("Removing embedded textures requires a .bsp file.");
 
             Log($"Removing embedded textures from '{bspFilePath}' and saving the result to '{outputFilePath}'.");
 
             var removedTextureCount = Bsp.RemoveEmbeddedTextures(bspFilePath, outputFilePath);
 
-            Log($"Removed {removedTextureCount} embedded textures from {bspFilePath} in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Log($"Removed {removedTextureCount} embedded textures from '{bspFilePath}' in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         static void MakeWad(string inputDirectory, string outputWadFilePath, bool fullRebuild, bool includeSubDirectories)
@@ -226,11 +232,9 @@ namespace WadMaker
             if (!Directory.Exists(inputDirectory))
             {
                 if (File.Exists(inputDirectory))
-                    Log($"ERROR: input must be a directory, not a file.");
+                    throw new InvalidUsageException("Unable to create or update wad file: the input must be a directory, not a file.");
                 else
-                    Log($"ERROR: input directory '{inputDirectory}' does not exist.");
-
-                return;
+                    throw new InvalidUsageException($"Unable to create or update wad file: the input directory '{inputDirectory}' does not exist.");
             }
 
             var stopwatch = Stopwatch.StartNew();
@@ -238,6 +242,7 @@ namespace WadMaker
             var texturesAdded = 0;
             var texturesUpdated = 0;
             var texturesRemoved = 0;
+            var errorCount = 0;
 
             var wadMakingSettings = WadMakingSettings.Load(inputDirectory);
             var updateExistingWad = !fullRebuild && File.Exists(outputWadFilePath);
@@ -246,6 +251,8 @@ namespace WadMaker
             var wadTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
             var isDecalsWad = Path.GetFileNameWithoutExtension(outputWadFilePath).ToLowerInvariant() == "decals";
+
+            Log($"{(updateExistingWad ? "Updating existing" : "Creating new")} {(isDecalsWad ? "decals wad file" : "wad file")}.");
 
             // Multiple files can map to the same texture, due to different extensions and upper/lower-case differences.
             // We'll group files by texture name, to make these collisions easy to detect:
@@ -266,17 +273,17 @@ namespace WadMaker
                     var textureName = imagePathsGroup.Key;
                     if (!IsValidTextureName(textureName))
                     {
-                        Log($"WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
+                        Log($"- WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
                         continue;
                     }
                     else if (textureName.Length > 15)
                     {
-                        Log($"WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
+                        Log($"- WARNING: The name '{textureName}' is too long ({string.Join(", ", imagePathsGroup)}). Skipping file(s).");
                         continue;
                     }
                     else if (imagePathsGroup.Count() > 1)
                     {
-                        Log($"WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePathsGroup)}). Skipping files.");
+                        Log($"- WARNING: multiple input files detected for '{textureName}' ({string.Join(", ", imagePathsGroup)}). Skipping files.");
                         continue;
                     }
                     // NOTE: Texture dimensions (which must be multiples of 16) are checked later, in CreateTextureFromImage.
@@ -344,7 +351,7 @@ namespace WadMaker
                                 }
                             }
                             texturesUpdated += 1;
-                            Log($"Updated texture '{textureName}' (from '{filePath}').");
+                            Log($"- Updated texture '{textureName}' (from '{filePath}').");
                         }
                         else
                         {
@@ -352,12 +359,13 @@ namespace WadMaker
                             wad.Textures.Add(texture);
                             wadTextureNames.Add(textureName);
                             texturesAdded += 1;
-                            Log($"Added texture '{textureName}' (from '{filePath}').");
+                            Log($"- Added texture '{textureName}' (from '{filePath}').");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Log($"ERROR: failed to build '{filePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                        Log($"- ERROR: failed to build '{textureName}': {ex.GetType().Name}: '{ex.Message}'.");
+                        errorCount += 1;
                     }
                 }
 
@@ -374,7 +382,7 @@ namespace WadMaker
                             // Delete texture:
                             wad.Textures.Remove(wad.Textures.First(texture => texture.Name.ToLowerInvariant() == textureName));
                             texturesRemoved += 1;
-                            Log($"Removed texture '{textureName}'.");
+                            Log($"- Removed texture '{textureName}'.");
                         }
                     }
                 }
@@ -397,9 +405,14 @@ namespace WadMaker
             }
 
             if (updateExistingWad)
-                Log($"Updated {outputWadFilePath} from {inputDirectory}: added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Log($"Updated '{outputWadFilePath}' from '{inputDirectory}': added {texturesAdded}, updated {texturesUpdated} and removed {texturesRemoved} textures, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
             else
-                Log($"Created {outputWadFilePath}, with {texturesAdded} textures from {inputDirectory}, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+                Log($"Created '{outputWadFilePath}', with {texturesAdded} textures from '{inputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+
+            if (errorCount == 0)
+                Log("No errors.");
+            else
+                Log($"{errorCount} errors.");
         }
 
 
@@ -692,7 +705,10 @@ namespace WadMaker
         static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(value, max));
 
         static Wad LoadWad(string filePath)
-            => Wad.Load(filePath, (index, name, exception) => Log($"Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
+        {
+            Log($"Loading wad file: '{filePath}'.");
+            return Wad.Load(filePath, (index, name, exception) => Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
+        }
 
         static void CreateDirectory(string? path)
         {

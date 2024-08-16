@@ -84,9 +84,13 @@ namespace SpriteMaker
                         MakeSprites(settings.InputPath, settings.OutputPath, settings.FullRebuild, settings.IncludeSubDirectories, settings.EnableSubDirectoryRemoval);
                 }
             }
+            catch (InvalidUsageException ex)
+            {
+                Log($"ERROR: {ex.Message}");
+            }
             catch (Exception ex)
             {
-                Log($"Error: {ex.GetType().Name}: '{ex.Message}'.");
+                Log($"ERROR: {ex.GetType().Name}: '{ex.Message}'.");
                 Log(ex.StackTrace);
             }
             finally
@@ -114,14 +118,14 @@ namespace SpriteMaker
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
                     case "-gif": settings.ExtractAsGif = true; break;
                     case "-nologfile": settings.DisableFileLogging = true; break;
-                    default: throw new ArgumentException($"Unknown argument: '{arg}'.");
+                    default: throw new InvalidUsageException($"Unknown argument: '{arg}'.");
                 }
             }
 
             // Then handle arguments (paths):
             var paths = args.Skip(index).ToArray();
             if (paths.Length == 0)
-                throw new ArgumentException("Missing input path (image or sprite file, or folder) argument.");
+                throw new InvalidUsageException("Missing input path (image or sprite file, or folder) argument.");
 
             if (File.Exists(paths[0]) && Path.GetExtension(paths[0]).ToLowerInvariant() == ".spr")
                 settings.Extract = true;
@@ -192,6 +196,8 @@ namespace SpriteMaker
         {
             var stopwatch = Stopwatch.StartNew();
 
+            Log($"Extracting sprites from '{inputDirectory}' to '{outputDirectory}'.");
+
             (var spriteCount, var imageFilesCreated, var imageFilesSkipped) = ExtractSpritesFromDirectory(
                 inputDirectory,
                 outputDirectory,
@@ -199,7 +205,7 @@ namespace SpriteMaker
                 overwriteExistingFiles,
                 includeSubDirectories);
 
-            Log($"Extracted {imageFilesCreated} images from {spriteCount} sprites from {inputDirectory} to {outputDirectory} (skipped {imageFilesSkipped} existing files), in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Log($"Extracted {imageFilesCreated} images from {spriteCount} sprites from '{inputDirectory}' to '{outputDirectory}' (skipped {imageFilesSkipped} existing files), in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         static void ExtractSingleSprite(
@@ -209,6 +215,8 @@ namespace SpriteMaker
             bool overwriteExistingFiles)
         {
             var stopwatch = Stopwatch.StartNew();
+
+            Log($"Extracting sprite '{inputPath}' to '{outputPath}'.");
 
             (var success, var imageFilesCreated, var imageFilesSkipped) = ExtractSprite(inputPath, outputPath, extractionFormat, overwriteExistingFiles);
 
@@ -220,14 +228,18 @@ namespace SpriteMaker
         {
             var stopwatch = Stopwatch.StartNew();
 
+            Log($"Creating sprites from '{inputDirectory}' and saving it to '{outputDirectory}'.");
+
             (var spritesAdded, var spritesUpdated, var spritesRemoved) = MakeSpritesFromImagesDirectory(inputDirectory, outputDirectory, fullRebuild, includeSubDirectories, enableSubDirectoryRemoving);
 
-            Log($"Updated {outputDirectory} from {inputDirectory}: added {spritesAdded}, updated {spritesUpdated} and removed {spritesRemoved} sprites, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            Log($"Updated '{outputDirectory}' from '{inputDirectory}': added {spritesAdded}, updated {spritesUpdated} and removed {spritesRemoved} sprites, in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
         static void MakeSingleSprite(string inputPath, string outputPath)
         {
             var stopwatch = Stopwatch.StartNew();
+
+            Log($"Creating a single sprite from '{inputPath}' and saving it to '{outputPath}'.");
 
             // Gather all related files and settings (for animated sprites, it's possible to use multiple frame-numbered images):
             var inputDirectory = Path.GetDirectoryName(inputPath)!;
@@ -319,7 +331,7 @@ namespace SpriteMaker
         {
             try
             {
-                Log($"Extracting '{inputPath}'...");
+                Log($"- Extracting '{inputPath}'...");
 
                 var sprite = Sprite.Load(inputPath);
                 var spriteFilenameSettings = new SpriteFilenameSettings {
@@ -350,7 +362,7 @@ namespace SpriteMaker
             }
             catch (Exception ex)
             {
-                Log($"WARNING: Failed to extract '{inputPath}': {ex.GetType().Name}: '{ex.Message}'.");
+                Log($"- WARNING: Failed to extract '{inputPath}': {ex.GetType().Name}: '{ex.Message}'.");
                 return (false, 0, 0);
             }
         }
@@ -378,7 +390,7 @@ namespace SpriteMaker
                 var imageOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".png");
                 if (overwriteExistingFiles || !File.Exists(imageOutputPath))
                 {
-                    Log($"  Creating image file '{imageOutputPath}'.");
+                    Log($"- Creating image file '{imageOutputPath}'.");
                     using (var image = new Image<Rgba32>((int)spriteFrame.FrameWidth, (int)spriteFrame.FrameHeight))
                     {
                         var imageFrame = image.Frames[0];
@@ -396,7 +408,7 @@ namespace SpriteMaker
                 }
                 else
                 {
-                    Log($"  Skipping image file '{imageOutputPath}' because it already exists.");
+                    Log($"- Skipping image file '{imageOutputPath}' because it already exists.");
                     imageFilesSkipped += 1;
                 }
             }
@@ -415,7 +427,7 @@ namespace SpriteMaker
             var spritesheetOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".png");
             if (!overwriteExistingFiles && File.Exists(spritesheetOutputPath))
             {
-                Log($"  Skipping image file '{spritesheetOutputPath}' because it already exists.");
+                Log($"- Skipping image file '{spritesheetOutputPath}' because it already exists.");
                 return false;
             }
 
@@ -423,7 +435,7 @@ namespace SpriteMaker
             //       but with very large origin values that could produce extremely large spritesheets with lots of wasted space.
             //       So frames with custom origins will just be cut off here. For these kind of sprites image sequences should be used instead.
 
-            Log($"  Creating image file '{spritesheetOutputPath}'.");
+            Log($"- Creating image file '{spritesheetOutputPath}'.");
             using (var image = new Image<Rgba32>((int)sprite.MaximumWidth * sprite.Frames.Count, (int)sprite.MaximumHeight))
             {
                 for (int i = 0; i < sprite.Frames.Count; i++)
@@ -458,13 +470,13 @@ namespace SpriteMaker
             var gifOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".gif");
             if (!overwriteExistingFiles && File.Exists(gifOutputPath))
             {
-                Log($"  Skipping image file '{gifOutputPath}' because it already exists.");
+                Log($"- Skipping image file '{gifOutputPath}' because it already exists.");
                 return false;
             }
 
             // NOTE: Support for custom frame offsets is limited when extracting as gif, for the same reasons as with spritesheets.
 
-            Log($"  Creating image file '{gifOutputPath}'.");
+            Log($"- Creating image file '{gifOutputPath}'.");
             using (var image = new Image<Rgba32>((int)sprite.MaximumWidth, (int)sprite.MaximumHeight))
             {
                 while (image.Frames.Count < sprite.Frames.Count)
@@ -614,12 +626,12 @@ namespace SpriteMaker
                         if (isExistingSprite)
                         {
                             spritesUpdated += 1;
-                            Log($"Updated sprite '{outputSpritePath}' (from '{imagePathsGroup.First()}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
+                            Log($"- Updated sprite '{outputSpritePath}' (from '{imagePathsGroup.First()}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
                         }
                         else
                         {
                             spritesAdded += 1;
-                            Log($"Added sprite '{outputSpritePath}' (from '{imagePathsGroup.First()}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
+                            Log($"- Added sprite '{outputSpritePath}' (from '{imagePathsGroup.First()}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
                         }
                     }
                 }
@@ -642,12 +654,12 @@ namespace SpriteMaker
                             {
                                 File.Delete(spriteFilePath);
                                 spritesRemoved += 1;
-                                Log($"Removed sprite '{spriteFilePath}'.");
+                                Log($"- Removed sprite '{spriteFilePath}'.");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Log($"WARNING: Failed to remove '{spriteFilePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                            Log($"- WARNING: Failed to remove '{spriteFilePath}': {ex.GetType().Name}: '{ex.Message}'.");
                         }
                     }
                 }
