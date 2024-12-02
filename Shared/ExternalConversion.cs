@@ -11,7 +11,7 @@ namespace Shared
         /// Use '{input_escaped}' and '{output_escaped}' to get the input and output paths with escaped backslashes (e.g. 'C:\\directory\\filename' instead of 'C:\directory\filename').
         /// </para>
         /// </summary>
-        public static string[] ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath, Action<string> log)
+        public static string[] ExecuteConversionCommand(string converter, string converterArguments, string inputPath, string outputPath, Logger logger)
         {
             var arguments = converterArguments
                 .Replace("{input}", inputPath)
@@ -20,7 +20,7 @@ namespace Shared
                 .Replace("{output_escaped}", outputPath.Replace("\\", "\\\\"))
                 .Trim();
 
-            log($"Executing conversion command: '{converter} {arguments}'.");
+            logger.Log($"Executing conversion command: '{converter} {arguments}'.");
 
             var startInfo = new ProcessStartInfo(converter, arguments)
             {
@@ -32,13 +32,13 @@ namespace Shared
 
             using (var process = new Process { StartInfo = startInfo })
             {
-                process.OutputDataReceived += (sender, e) => log($"    INFO: {e.Data}");
-                process.ErrorDataReceived += (sender, e) => log($"    ERROR: {e.Data}");
+                process.OutputDataReceived += (sender, e) => logger.Log($"    INFO: {e.Data}");
+                process.ErrorDataReceived += (sender, e) => logger.Log($"    ERROR: {e.Data}");
                 process.Start();
                 if (!process.WaitForExit(10_000))
                     throw new TimeoutException("Conversion command did not finish within 10 seconds, .");
 
-                log($"Conversion command finished with exit code: {process.ExitCode}.");
+                logger.Log($"Conversion command finished with exit code: {process.ExitCode}.");
             }
 
             return Directory.EnumerateFiles(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath) + "*")
