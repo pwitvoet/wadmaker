@@ -23,6 +23,9 @@ namespace WadMaker
                     throw new InvalidUsageException($"Unable to create or update wad file: the input directory '{inputDirectory}' does not exist.");
             }
 
+            if (Path.GetExtension(outputWadFilePath).ToLowerInvariant() != ".wad")
+                throw new InvalidUsageException($"Unable to create or update wad file: the output must be a .wad file.");
+
             var stopwatch = Stopwatch.StartNew();
 
             var texturesAdded = 0;
