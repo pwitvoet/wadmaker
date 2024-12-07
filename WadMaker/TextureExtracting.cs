@@ -35,7 +35,7 @@ namespace WadMaker
             var isDecalsWad = Path.GetFileName(inputFilePath).ToLowerInvariant() == "decals.wad";
             foreach (var texture in textures)
             {
-                var maxMipmap = extractMipmaps ? 4 : 1;
+                var maxMipmap = (texture.Type == TextureType.MipmapTexture && extractMipmaps) ? 4 : 1;
                 for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
                 {
                     try

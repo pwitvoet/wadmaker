@@ -22,6 +22,13 @@ namespace WadMaker
 
 
         /// <summary>
+        /// The type of this texture. Three types are available: simple images (qpic), textures with mipmap data, and fonts.
+        /// Defaults to <see cref="TextureType.MipmapTexture"/> (textures with mipmap data).
+        /// </summary>
+        public TextureType? TextureType { get; set; }
+
+
+        /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed texture.
         /// Defaults to <see cref="DitheringAlgorithm.FloydSteinberg"/> for normal textures,
         /// and to <see cref="DitheringAlgorithm.None"/> for animated textures (to prevent 'flickering' animations).

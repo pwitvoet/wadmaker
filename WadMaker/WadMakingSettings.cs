@@ -50,6 +50,8 @@ namespace WadMaker
                 if (rule.TextureSettings is TextureSettings ruleSettings)
                 {
                     // More specific rules override settings defined by less specific rules:
+                    if (ruleSettings.Ignore != null)                    textureSettings.Ignore = ruleSettings.Ignore;
+                    if (ruleSettings.TextureType != null)               textureSettings.TextureType = ruleSettings.TextureType;
                     if (ruleSettings.DitheringAlgorithm != null)        textureSettings.DitheringAlgorithm = ruleSettings.DitheringAlgorithm;
                     if (ruleSettings.DitherScale != null)               textureSettings.DitherScale = ruleSettings.DitherScale;
                     if (ruleSettings.TransparencyThreshold != null)     textureSettings.TransparencyThreshold = ruleSettings.TransparencyThreshold;
@@ -59,7 +61,6 @@ namespace WadMaker
                     if (ruleSettings.DecalColor != null)                textureSettings.DecalColor = ruleSettings.DecalColor;
                     if (ruleSettings.Converter != null)                 textureSettings.Converter = ruleSettings.Converter;
                     if (ruleSettings.ConverterArguments != null)        textureSettings.ConverterArguments = ruleSettings.ConverterArguments;
-                    if (ruleSettings.Ignore != null)                    textureSettings.Ignore = ruleSettings.Ignore;
                 }
 
                 if (rule.LastModified > timestamp)
@@ -246,6 +247,8 @@ namespace WadMaker
 
         #region Parsing/serialization
 
+        const string IgnoreKey = "ignore";
+        const string TextureTypeKey = "texture-type";
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
         const string TransparencyThresholdKey = "transparency-threshold";
@@ -255,10 +258,10 @@ namespace WadMaker
         const string DecalColorKey = "decal-color";
         const string ConverterKey = "converter";
         const string ConverterArgumentsKey = "arguments";
+
         const string TimestampKey = "timestamp";
         const string RemovedKey = "removed";
         const string GlobalKey = "global";
-        const string IgnoreKey = "ignore";
 
 
         private static Rule? ParseRuleLine(string line, DateTimeOffset fileTimestamp, bool internalFormat = false, bool isGlobal = false)
@@ -307,6 +310,16 @@ namespace WadMaker
 
                 switch (token.ToLowerInvariant())
                 {
+                    case IgnoreKey:
+                        RequireToken(":");
+                        textureSettings.Ignore = ParseToken(bool.Parse);
+                        break;
+
+                    case TextureTypeKey:
+                        RequireToken(":");
+                        textureSettings.TextureType = ParseToken(ParseTextureType, "texture type");
+                        break;
+
                     case DitheringAlgorithmKey:
                         RequireToken(":");
                         textureSettings.DitheringAlgorithm = ParseToken(ParseDitheringAlgorithm, "dithering algorithm");
@@ -351,11 +364,6 @@ namespace WadMaker
                         RequireToken(":");
                         textureSettings.ConverterArguments = ParseToken(s => s, "converter arguments string");
                         ExternalConversion.ThrowIfArgumentsAreInvalid(textureSettings.ConverterArguments);
-                        break;
-
-                    case IgnoreKey:
-                        RequireToken(":");
-                        textureSettings.Ignore = ParseToken(bool.Parse);
                         break;
 
                     default:
@@ -437,6 +445,17 @@ namespace WadMaker
 
         private static bool IsComment(string token) => token?.StartsWith("//") == true;
 
+        private static TextureType ParseTextureType(string str)
+        {
+            switch (str.ToLowerInvariant())
+            {
+                case "qpic": return TextureType.SimpleTexture;
+                case "mipmap": return TextureType.MipmapTexture;
+                case "font": return TextureType.Font;
+                default: throw new InvalidDataException($"Invalid texture type: '{str}'.");
+            }
+        }
+
         private static DitheringAlgorithm ParseDitheringAlgorithm(string str)
         {
             switch (str.ToLowerInvariant())
@@ -471,6 +490,8 @@ namespace WadMaker
                     {
                         var settings = rule.TextureSettings.Value;
 
+                        if (settings.Ignore != null) writer.Write($" {IgnoreKey}: {settings.Ignore}");
+                        if (settings.TextureType != null) writer.Write($" {TextureTypeKey}: {Serialize(settings.TextureType.Value)}");
                         if (settings.DitheringAlgorithm != null) writer.Write($" {DitheringAlgorithmKey}: {Serialize(settings.DitheringAlgorithm.Value)}");
                         if (settings.DitherScale != null) writer.Write($" {DitherScaleKey}: {settings.DitherScale}");
                         if (settings.TransparencyThreshold != null) writer.Write($" {TransparencyThresholdKey}: {settings.TransparencyThreshold}");
@@ -480,7 +501,6 @@ namespace WadMaker
                         if (settings.DecalColor != null) writer.Write($" {DecalColorKey}: {Serialize(settings.DecalColor.Value, false)}");
                         if (settings.Converter != null) writer.Write($" {ConverterKey}: '{settings.Converter}'");
                         if (settings.ConverterArguments != null) writer.Write($" {ConverterArgumentsKey}: '{settings.ConverterArguments}'");
-                        if (settings.Ignore != null) writer.Write($" {IgnoreKey}: {settings.Ignore}");
 
                         if (rule.IsGlobal) writer.Write($" {GlobalKey}");
                     }
@@ -490,6 +510,17 @@ namespace WadMaker
                     }
                     writer.WriteLine($" {TimestampKey}: {rule.LastModified.ToUnixTimeMilliseconds()}");
                 }
+            }
+        }
+
+        private static string Serialize(TextureType textureType)
+        {
+            switch (textureType)
+            {
+                case TextureType.SimpleTexture: return "qpic";
+                default:
+                case TextureType.MipmapTexture: return "mipmap";
+                case TextureType.Font: return "font";
             }
         }
 

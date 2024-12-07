@@ -218,6 +218,59 @@ namespace WadMaker
 
         static Texture CreateTextureFromImage(string path, string textureName, TextureSettings textureSettings, bool isDecalsWad)
         {
+            switch (textureSettings.TextureType)
+            {
+                case TextureType.SimpleTexture: return CreateSimpleTextureFromImage(path, textureName, textureSettings);
+                default:
+                case TextureType.MipmapTexture: return CreateMipmapTextureFromImage(path, textureName, textureSettings, isDecalsWad);
+                case TextureType.Font: throw new NotSupportedException("Font textures are not supported.");
+            }
+        }
+
+        static Texture CreateSimpleTextureFromImage(string path, string textureName, TextureSettings textureSettings)
+        {
+            using (var image = ImageReading.ReadImage(path))
+            {
+                var colorHistogram = ColorQuantization.GetColorHistogram(new[] { image }, color => false);
+                var maxColors = 256;
+                var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
+
+                // Always make sure we've got a 256-color palette (some tools can't handle smaller palettes):
+                if (colorClusters.Length < maxColors)
+                {
+                    colorClusters = colorClusters
+                        .Concat(Enumerable
+                            .Range(0, maxColors - colorClusters.Length)
+                            .Select(i => (new Rgba32(), new[] { new Rgba32() })))
+                        .ToArray();
+                }
+
+                // Create the actual palette, and a color index lookup cache:
+                var palette = colorClusters
+                    .Select(cluster => cluster.Item1)
+                    .ToArray();
+                var colorIndexMappingCache = new Dictionary<Rgba32, int>();
+                for (int i = 0; i < colorClusters.Length; i++)
+                {
+                    (_, var colors) = colorClusters[i];
+                    foreach (var color in colors)
+                        colorIndexMappingCache[color] = i;
+                }
+
+                // Create texture data:
+                var textureData = CreateTextureData(image, palette, colorIndexMappingCache, textureSettings, color => false, disableDithering: false);
+
+                return Texture.CreateSimpleTexture(
+                    name: textureName,
+                    width: image.Width,
+                    height: image.Height,
+                    imageData: textureData,
+                    palette: palette);
+            }
+        }
+
+        static Texture CreateMipmapTextureFromImage(string path, string textureName, TextureSettings textureSettings, bool isDecalsWad)
+        {
             // Load the main texture image, and any available mipmap images:
             using (var images = new DisposableList<Image<Rgba32>?>(GetMipmapFilePaths(path).Prepend(path)
                 .Select(imagePath => File.Exists(imagePath) ? ImageReading.ReadImage(imagePath) : null)))
