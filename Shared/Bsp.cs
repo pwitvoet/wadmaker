@@ -48,15 +48,84 @@ namespace Shared
         }
 
         /// <summary>
+        /// Embeds textures from the given wad file into the given bsp file.
+        /// If no output path is provided, then the input bsp file is overwritten.
+        /// </summary>
+        public static int EmbedTextures(Wad wadFile, string bspFilePath, string? outputPath = null)
+        {
+            var wadTextures = wadFile.Textures.ToDictionary(texture => texture.Name.ToLowerInvariant(), texture => texture);   // TODO: Case-insensitive key lookup!
+
+            // Read all bsp lump contents:
+            var lumps = new List<Lump>();
+            var lumpsData = new List<byte[]>();
+            using (var inputStream = File.OpenRead(bspFilePath))
+            {
+                var bspHeader = ReadBspHeader(inputStream);
+                lumps.AddRange(bspHeader.Lumps);
+                lumpsData.AddRange(bspHeader.Lumps.Select(lump => ReadLumpData(inputStream, lump)));
+            }
+
+            // Embed textures by inserting their image and palette data:
+            var embeddedTextureCount = 0;
+            BspTexture?[] bspTextures;
+            using (var texturesLumpstream = new MemoryStream(lumpsData[TexturesLumpIndex]))
+            {
+                var textureOffsets = ReadTextureOffsets(texturesLumpstream);
+                bspTextures = new BspTexture?[textureOffsets.Length];
+
+                for (int i = 0; i < textureOffsets.Length; i++)
+                {
+                    var textureOffset = textureOffsets[i];
+                    if (textureOffset < 0)
+                        continue;
+
+                    texturesLumpstream.Seek(textureOffset, SeekOrigin.Begin);
+                    var bspTexture = ReadTexture(texturesLumpstream);
+                    if (wadTextures.TryGetValue(bspTexture.Name.ToLowerInvariant(), out var wadTexture))
+                    {
+                        bspTexture.ImageData = new[] {
+                            wadTexture.ImageData,
+                            wadTexture.Mipmap1Data,
+                            wadTexture.Mipmap2Data,
+                            wadTexture.Mipmap3Data,
+                        };
+                        bspTexture.Palette = wadTexture.Palette;
+                        embeddedTextureCount += 1;
+                    }
+                    bspTextures[i] = bspTexture;
+                }
+            }
+
+            // Create new texture lump data:
+            using (var stream = new MemoryStream())
+            {
+                WriteTextureOffsets(stream, bspTextures);
+                foreach (var bspTexture in bspTextures)
+                {
+                    if (bspTexture is not null)
+                        WriteTexture(stream, bspTexture.Value);
+                }
+
+                lumpsData[TexturesLumpIndex] = stream.ToArray();
+            }
+
+            // Save the bsp file:
+            using (var outputStream = File.Create(outputPath ?? bspFilePath))
+                SaveBspFile(outputStream, lumps, lumpsData);
+
+            return embeddedTextureCount;
+        }
+
+        /// <summary>
         /// Removes embedded textures from the specified bsp file.
         /// If no output path is provided, then the input bsp file is overwritten.
         /// </summary>
-        public static int RemoveEmbeddedTextures(string path, string? outputPath = null)
+        public static int RemoveEmbeddedTextures(string bspFilePath, string? outputPath = null)
         {
             // Read all bsp lump contents:
             var lumps = new List<Lump>();
             var lumpsData = new List<byte[]>();
-            using (var inputStream = File.OpenRead(path))
+            using (var inputStream = File.OpenRead(bspFilePath))
             {
                 var bspHeader = ReadBspHeader(inputStream);
                 lumps.AddRange(bspHeader.Lumps);
@@ -102,28 +171,9 @@ namespace Shared
                 lumpsData[TexturesLumpIndex] = stream.ToArray();
             }
 
-            // Recalculate lump offsets/lengths:
-            var lumpIndexes = lumps
-                .Select((lump, i) => (lump, i))
-                .OrderBy(pair => pair.lump.Offset)
-                .Select(pair => pair.i)
-                .ToArray();
-            var offset = 4 + lumps.Count * 8;   // 124, BSP header size (15 lumps)
-            for (int i = 0; i < lumpIndexes.Length; i++)
-            {
-                var lumpIndex = lumpIndexes[i];
-                lumps[lumpIndex] = new Lump { Offset = offset, Length = lumpsData[lumpIndex].Length };
-                offset += lumpsData[lumpIndex].Length;
-                offset += StreamExtensions.RequiredPadding(lumpsData[lumpIndex].Length, 4);
-            }
-
             // Save the bsp file:
-            using (var outputStream = File.OpenWrite(outputPath ?? path))
-            {
-                WriteBspHeader(outputStream, new BspHeader { Version = 30, Lumps = lumps.ToArray() });
-                foreach (var lumpIndex in lumpIndexes)
-                    WriteLumpData(outputStream, lumpsData[lumpIndex]);
-            }
+            using (var outputStream = File.Create(outputPath ?? bspFilePath))
+                SaveBspFile(outputStream, lumps, lumpsData);
 
             return removedTextureCount;
         }
@@ -191,6 +241,33 @@ namespace Shared
             return texture;
         }
 
+
+        private static void SaveBspFile(Stream stream, IReadOnlyList<Lump> lumps, IReadOnlyList<byte[]> lumpsData)
+        {
+            // First calculate lump offsets/lengths (handling lumps in order of appearance):
+            var lumpIndexes = lumps
+                .Select((lump, i) => (lump, i))
+                .OrderBy(pair => pair.lump.Offset)
+                .Select(pair => pair.i)
+                .ToArray();
+
+            var adjustedLumps = new Lump[lumps.Count];
+            var offset = 4 + lumps.Count * 8;   // 124, BSP header size (15 lumps)
+            for (int i = 0; i < lumpIndexes.Length; i++)
+            {
+                var lumpIndex = lumpIndexes[i];
+                adjustedLumps[lumpIndex] = new Lump { Offset = offset, Length = lumpsData[lumpIndex].Length };
+                offset += lumpsData[lumpIndex].Length;
+                offset += StreamExtensions.RequiredPadding(lumpsData[lumpIndex].Length, 4);
+            }
+
+            // Then write the bsp file contents:
+            var bspHeader = new BspHeader { Version = 30, Lumps = adjustedLumps };
+            WriteBspHeader(stream, bspHeader);
+
+            foreach (var lumpIndex in lumpIndexes)
+                WriteLumpData(stream, lumpsData[lumpIndex]);
+        }
 
         private static void WriteBspHeader(Stream stream, BspHeader header)
         {

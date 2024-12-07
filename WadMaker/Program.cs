@@ -24,11 +24,17 @@ namespace WadMaker
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
         public bool RemoveEmbeddedTextures { get; set; }    // -remove      removes embedded textures from the given bsp file
 
+        [MemberNotNullWhen(true, nameof(InputFilePath))]
+        [MemberNotNullWhen(true, nameof(ExtraInputFilePath))]
+        [MemberNotNullWhen(true, nameof(OutputFilePath))]
+        public bool EmbedTextures { get; set; }
+
         // Other settings:
         public string? InputDirectory { get; set; }         // Build mode only
-        public string? InputFilePath { get; set; }          // Wad or bsp path (output in build mode, input in extract mode).
+        public string? InputFilePath { get; set; }          // Wad or bsp path
+        public string? ExtraInputFilePath { get; set; }     // Bsp path (when embedding textures)
         public string? OutputDirectory { get; set; }        // Extract mode only
-        public string? OutputFilePath { get; set; }         // Output bsp path (when removing embedded textures)
+        public string? OutputFilePath { get; set; }         // Output bsp path (when adding or removing embedded textures)
 
         public bool DisableFileLogging { get; set; }        // -nologfile   disables logging to a file (parent-directory\wadmaker.log)
     }
@@ -59,6 +65,10 @@ namespace WadMaker
                 if (settings.Extract)
                 {
                     TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles, logger);
+                }
+                else if (settings.EmbedTextures)
+                {
+                    TextureEmbedding.EmbedTextures(settings.InputFilePath, settings.ExtraInputFilePath, settings.OutputFilePath, logger);
                 }
                 else if (settings.RemoveEmbeddedTextures)
                 {
@@ -114,8 +124,17 @@ namespace WadMaker
             if (File.Exists(paths[0]))
             {
                 var extension = Path.GetExtension(paths[0]).ToLowerInvariant();
-                if (extension == ".wad" || (extension == ".bsp" && !settings.RemoveEmbeddedTextures))
+                if (extension == ".bsp" && !settings.RemoveEmbeddedTextures)
+                {
                     settings.Extract = true;
+                }
+                else if (extension == ".wad")
+                {
+                    if (paths.Length > 1 && File.Exists(paths[1]) && Path.GetExtension(paths[1]).ToLowerInvariant() == ".bsp")
+                        settings.EmbedTextures = true;
+                    else
+                        settings.Extract = true;
+                }
             }
 
 
@@ -128,6 +147,17 @@ namespace WadMaker
                     settings.OutputDirectory = args[index++];
                 else
                     settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.InputFilePath)!, Path.GetFileNameWithoutExtension(settings.InputFilePath) + "_extracted");
+            }
+            else if (settings.EmbedTextures)
+            {
+                // Embedding textures requires a wad and a bsp file path, and optionally an output bsp file path:
+                settings.InputFilePath = args[index++];
+                settings.ExtraInputFilePath = args[index++];
+
+                if (index < args.Length)
+                    settings.OutputFilePath = args[index++];
+                else
+                    settings.OutputFilePath = settings.ExtraInputFilePath;
             }
             else if (settings.RemoveEmbeddedTextures)
             {
