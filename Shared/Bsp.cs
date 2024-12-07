@@ -65,20 +65,17 @@ namespace Shared
 
             // Remove image and palette data from embedded textures:
             var removedTextureCount = 0;
-            BspTexture[] bspTextures;
+            BspTexture?[] bspTextures;
             using (var texturesLumpstream = new MemoryStream(lumpsData[TexturesLumpIndex]))
             {
                 var textureOffsets = ReadTextureOffsets(texturesLumpstream);
-                bspTextures = new BspTexture[textureOffsets.Length];
+                bspTextures = new BspTexture?[textureOffsets.Length];
 
                 for (int i = 0; i < textureOffsets.Length; i++)
                 {
                     var textureOffset = textureOffsets[i];
                     if (textureOffset < 0)
-                    {
-                        bspTextures[i] = new BspTexture { Name = "" };
                         continue;
-                    }
 
                     texturesLumpstream.Seek(textureOffset, SeekOrigin.Begin);
                     var bspTexture = ReadTexture(texturesLumpstream);
@@ -97,7 +94,10 @@ namespace Shared
             {
                 WriteTextureOffsets(stream, bspTextures);
                 foreach (var bspTexture in bspTextures)
-                    WriteTexture(stream, bspTexture);
+                {
+                    if (bspTexture is not null)
+                        WriteTexture(stream, bspTexture.Value);
+                }
 
                 lumpsData[TexturesLumpIndex] = stream.ToArray();
             }
@@ -212,21 +212,28 @@ namespace Shared
                 stream.Write(new byte[padding]);
         }
 
-        private static void WriteTextureOffsets(Stream stream, BspTexture[] textures)
+        private static void WriteTextureOffsets(Stream stream, BspTexture?[] textures)
         {
             stream.Write(textures.Length);
             var offset = 4 + textures.Length * 4;
             foreach (var texture in textures)
             {
-                stream.Write(offset);
-                if (texture.IsEmbedded)
+                if (texture is null)
                 {
-                    offset += 40 + texture.ImageData.Sum(imageData => imageData!.Length) + 2 + texture.Palette.Length * 3;
-                    offset += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
+                    stream.Write(-1);
                 }
                 else
                 {
-                    offset += 40;
+                    stream.Write(offset);
+                    if (texture.Value.IsEmbedded)
+                    {
+                        offset += 40 + texture.Value.ImageData.Sum(imageData => imageData!.Length) + 2 + texture.Value.Palette.Length * 3;
+                        offset += StreamExtensions.RequiredPadding(2 + texture.Value.Palette.Length * 3, 4);
+                    }
+                    else
+                    {
+                        offset += 40;
+                    }
                 }
             }
         }
