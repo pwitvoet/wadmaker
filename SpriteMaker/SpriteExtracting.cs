@@ -122,11 +122,6 @@ namespace SpriteMaker
                 logger.Log($"- Extracting '{inputPath}'...");
 
                 var sprite = Sprite.Load(inputPath);
-                var spriteFilenameSettings = new SpriteFilenameSettings
-                {
-                    Type = sprite.Type,
-                    TextureFormat = sprite.TextureFormat
-                };
 
                 switch (extractionFormat)
                 {
