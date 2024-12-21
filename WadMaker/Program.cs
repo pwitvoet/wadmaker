@@ -19,6 +19,10 @@ namespace WadMaker
         public bool ExtractMipmaps { get; set; }            // -mipmaps     also extract mipmaps
         public bool OverwriteExistingFiles { get; set; }    // -overwrite   extract mode only, enables overwriting of existing image files (off by default)
 
+        [MemberNotNullWhen(true, nameof(InputFilePath))]
+        [MemberNotNullWhen(true, nameof(OutputFilePath))]
+        public bool ExtractToWad { get; set; }              //              This extraction mode is enabled when the first argument is a bsp file path, and the second a wad file path.
+
         // Bsp settings:
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
@@ -65,6 +69,10 @@ namespace WadMaker
                 if (settings.Extract)
                 {
                     TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles, logger);
+                }
+                else if (settings.ExtractToWad)
+                {
+                    TextureExtracting.ExtractEmbeddedTexturesToWad(settings.InputFilePath, settings.OutputFilePath, logger);
                 }
                 else if (settings.EmbedTextures)
                 {
@@ -126,7 +134,10 @@ namespace WadMaker
                 var extension = Path.GetExtension(paths[0]).ToLowerInvariant();
                 if (extension == ".bsp" && !settings.RemoveEmbeddedTextures)
                 {
-                    settings.Extract = true;
+                    if (paths.Length > 1 && Path.GetExtension(paths[1]).ToLowerInvariant() == ".wad")
+                        settings.ExtractToWad = true;
+                    else
+                        settings.Extract = true;
                 }
                 else if (extension == ".wad")
                 {
@@ -147,6 +158,12 @@ namespace WadMaker
                     settings.OutputDirectory = args[index++];
                 else
                     settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.InputFilePath)!, Path.GetFileNameWithoutExtension(settings.InputFilePath) + "_extracted");
+            }
+            else if (settings.ExtractToWad)
+            {
+                // Embedded texture extraction to wad file requires a bsp file path and an output wad file path:
+                settings.InputFilePath = args[index++];
+                settings.OutputFilePath = args[index++];
             }
             else if (settings.EmbedTextures)
             {

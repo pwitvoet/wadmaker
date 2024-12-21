@@ -66,6 +66,23 @@ namespace WadMaker
             logger.Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from '{inputFilePath}' to '{outputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
+        public static void ExtractEmbeddedTexturesToWad(string inputBspFilePath, string outputWadFilePath, Logger logger)
+        {
+            var stopwatch = Stopwatch.StartNew();
+
+            logger.Log($"Extracting embedded textures from '{inputBspFilePath}' to '{outputWadFilePath}'.");
+
+            var wad = new Wad();
+            var embeddedTextures = Bsp.GetEmbeddedTextures(inputBspFilePath);
+            wad.Textures.AddRange(embeddedTextures);
+
+            // NOTE: The output file will be overwritten if it already exists:
+            CreateDirectory(Path.GetDirectoryName(outputWadFilePath));
+            wad.Save(outputWadFilePath);
+
+            logger.Log($"Extracted {embeddedTextures.Count} textures from '{inputBspFilePath}' to '{outputWadFilePath}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+        }
+
 
         static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
         {
