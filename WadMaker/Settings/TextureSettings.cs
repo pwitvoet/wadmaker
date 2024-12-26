@@ -1,8 +1,16 @@
 ﻿using Shared;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace WadMaker
+namespace WadMaker.Settings
 {
+    enum MipmapLevel
+    {
+        Main = 0,
+        Mipmap1 = 1,
+        Mipmap2 = 2,
+        Mipmap3 = 3,
+    }
+
     enum DecalTransparencySource
     {
         AlphaChannel,
@@ -13,7 +21,7 @@ namespace WadMaker
     /// <summary>
     /// Settings for converting an image to a texture.
     /// </summary>
-    struct TextureSettings
+    class TextureSettings : IEquatable<TextureSettings>
     {
         /// <summary>
         /// When true, the source image(s) are ignored - as if they don't exist.
@@ -26,6 +34,11 @@ namespace WadMaker
         /// Defaults to <see cref="TextureType.MipmapTexture"/> (textures with mipmap data).
         /// </summary>
         public TextureType? TextureType { get; set; }
+
+        /// <summary>
+        /// The mipmap level, for mipmap textures. Defaults to <see cref="MipmapLevel.Main"/>.
+        /// </summary>
+        public MipmapLevel? MipmapLevel { get; set; }
 
 
         /// <summary>
@@ -90,5 +103,50 @@ namespace WadMaker
         /// current file path and the location where the converter application must save the output image.
         /// </summary>
         public string? ConverterArguments { get; set; }
+
+
+        /// <summary>
+        /// Updates the current settings with the given settings.
+        /// </summary>
+        public void OverrideWith(TextureSettings overrideSettings)
+        {
+            if (overrideSettings.Ignore != null)                    Ignore = overrideSettings.Ignore;
+            if (overrideSettings.TextureType != null)               TextureType = overrideSettings.TextureType;
+            if (overrideSettings.MipmapLevel != null)               MipmapLevel = overrideSettings.MipmapLevel;
+            if (overrideSettings.DitheringAlgorithm != null)        DitheringAlgorithm = overrideSettings.DitheringAlgorithm;
+            if (overrideSettings.DitherScale != null)               DitherScale = overrideSettings.DitherScale;
+            if (overrideSettings.TransparencyThreshold != null)     TransparencyThreshold = overrideSettings.TransparencyThreshold;
+            if (overrideSettings.TransparencyColor != null)         TransparencyColor = overrideSettings.TransparencyColor;
+            if (overrideSettings.WaterFogColor != null)             WaterFogColor = overrideSettings.WaterFogColor;
+            if (overrideSettings.DecalTransparencySource != null)   DecalTransparencySource = overrideSettings.DecalTransparencySource;
+            if (overrideSettings.DecalColor != null)                DecalColor = overrideSettings.DecalColor;
+            if (overrideSettings.Converter != null)                 Converter = overrideSettings.Converter;
+            if (overrideSettings.ConverterArguments != null)        ConverterArguments = overrideSettings.ConverterArguments;
+        }
+
+
+        public bool Equals(TextureSettings? other)
+        {
+            return other is not null &&
+                Ignore == other.Ignore &&
+                TextureType == other.TextureType &&
+                MipmapLevel == other.MipmapLevel &&
+                DitheringAlgorithm == other.DitheringAlgorithm &&
+                DitherScale == other.DitherScale &&
+                TransparencyThreshold == other.TransparencyThreshold &&
+                TransparencyColor == other.TransparencyColor &&
+                WaterFogColor == other.WaterFogColor &&
+                DecalTransparencySource == other.DecalTransparencySource &&
+                DecalColor == other.DecalColor &&
+                Converter == other.Converter &&
+                ConverterArguments == other.ConverterArguments;
+        }
+
+        public override bool Equals(object? obj) => obj is TextureSettings other && Equals(other);
+
+        public override int GetHashCode() => 0; // Just do an equality check.
+
+        public static bool operator ==(TextureSettings? left, TextureSettings? right) => left?.Equals(right) ?? right is null;
+        public static bool operator !=(TextureSettings? left, TextureSettings? right) => !(left?.Equals(right) ?? right is null);
     }
 }
