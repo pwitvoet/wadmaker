@@ -174,7 +174,9 @@ namespace WadMaker.Settings
                 .Skip(1)
                 .Select(segment => segment.Trim().ToLowerInvariant()))
             {
-                if (TryParseMipmapLevel(segment, out var mipmapLevel))
+                if (TryParseTextureType(segment, out var textureType))
+                    settings.TextureType = textureType;
+                else if (TryParseMipmapLevel(segment, out var mipmapLevel))
                     settings.MipmapLevel = mipmapLevel;
                 else if (TryParseWaterFogColor(segment, out var waterFogColor))
                     settings.WaterFogColor = waterFogColor;
@@ -182,9 +184,34 @@ namespace WadMaker.Settings
             return settings;
         }
 
+        public static string InsertTextureSettingsIntoFilename(string filename, TextureSettings settings)
+        {
+            var extension = Path.GetExtension(filename);
+            var sb = new StringBuilder();
+
+            if (settings.TextureType != null && settings.TextureType != TextureType.MipmapTexture)
+                sb.Append("." + Serialization.ToString(settings.TextureType.Value));
+            if (settings.MipmapLevel != null && settings.MipmapLevel != MipmapLevel.Main)
+                sb.Append($".mipmap{(int)settings.MipmapLevel}");
+            if (settings.WaterFogColor != null)
+                sb.Append($".fog {settings.WaterFogColor.Value.R} {settings.WaterFogColor.Value.G} {settings.WaterFogColor.Value.B} {settings.WaterFogColor.Value.A}");
+
+            return Path.ChangeExtension(filename, sb.ToString() + extension);
+        }
+
+        private static bool TryParseTextureType(string str, out TextureType textureType)
+        {
+            switch (str.ToLowerInvariant())
+            {
+                case "qpic": textureType = TextureType.SimpleTexture; return true;
+                case "font": textureType = TextureType.Font; return true;
+                default: textureType = default; return false;
+            }
+        }
+
         private static bool TryParseMipmapLevel(string str, out MipmapLevel mipmapLevel)
         {
-            switch (str)
+            switch (str.ToLowerInvariant())
             {
                 case "mipmap1": mipmapLevel = MipmapLevel.Mipmap1; return true;
                 case "mipmap2": mipmapLevel = MipmapLevel.Mipmap2; return true;
@@ -195,7 +222,7 @@ namespace WadMaker.Settings
 
         private static bool TryParseWaterFogColor(string str, out Rgba32 waterFogColor)
         {
-            if (str.StartsWith("fog"))
+            if (str.StartsWith("fog", StringComparison.InvariantCultureIgnoreCase))
             {
                 var parts = str.Substring(3)
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries)

@@ -2,13 +2,12 @@
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
 using System.Diagnostics;
+using WadMaker.Settings;
 
 namespace WadMaker
 {
     public static class TextureExtracting
     {
-        // TODO: Also create a wadmaker.config file, if the wad contained fonts or simple images (mipmap textures are the default behavior, so those don't need a config,
-        //       unless the user wants to create a wad file and wants different settings for those images such as different dithering, etc.)
         public static void ExtractTextures(string inputFilePath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -40,7 +39,10 @@ namespace WadMaker
                 {
                     try
                     {
-                        var filePath = Path.Combine(outputDirectory, texture.Name + $"{(mipmap > 0 ? ".mipmap" + mipmap : "")}.png");
+                        var filePath = Path.Combine(outputDirectory, texture.Name + ".png");
+                        var fileSettings = GetOutputFileTextureSettings(texture, mipmap);
+                        filePath = WadMakingSettings.InsertTextureSettingsIntoFilename(filePath, fileSettings);
+
                         if (!overwriteExistingFiles && File.Exists(filePath))
                         {
                             logger.Log($"- WARNING: '{filePath}' already exist. Skipping texture.");
@@ -143,6 +145,23 @@ namespace WadMaker
             });
 
             return image;
+        }
+
+        static TextureSettings GetOutputFileTextureSettings(Texture texture, int mipmap)
+        {
+            if (mipmap > 0)
+                return new TextureSettings { MipmapLevel = (MipmapLevel)mipmap };
+
+            var settings = new TextureSettings { TextureType = texture.Type };
+            if (texture.Name.StartsWith("!"))
+            {
+                settings.WaterFogColor = new Rgba32(
+                    texture.Palette[3].R,
+                    texture.Palette[3].G,
+                    texture.Palette[3].B,
+                    texture.Palette[4].R);
+            }
+            return settings;
         }
 
 
