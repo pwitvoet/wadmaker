@@ -121,7 +121,7 @@ namespace WadMaker
 
             var width = texture.Width >> mipmap;
             var height = texture.Height >> mipmap;
-            var hasColorKey = texture.Name.StartsWith("{");
+            var hasColorKey = TextureName.IsTransparent(texture.Name);
 
             var image = new Image<Rgba32>(width, height);
             image.ProcessPixelRows(accessor =>
@@ -153,7 +153,7 @@ namespace WadMaker
                 return new TextureSettings { MipmapLevel = (MipmapLevel)mipmap };
 
             var settings = new TextureSettings { TextureType = texture.Type };
-            if (texture.Name.StartsWith("!"))
+            if (TextureName.IsWater(texture.Name))
             {
                 settings.WaterFogColor = new Rgba32(
                     texture.Palette[3].R,
