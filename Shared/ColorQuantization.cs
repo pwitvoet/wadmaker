@@ -59,23 +59,18 @@ namespace Shared
                 .ToArray();
         }
 
+        /// <inheritdoc cref="GetColorHistogram(IEnumerable{Image{Rgba32}}, Func{int, int, Rgba32, bool})"/>
+        public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<Image<Rgba32>> images, Func<Rgba32, bool> ignoreColor)
+            => GetColorHistogram(images.Select(image => image.Frames[0]), ignoreColor);
+
         /// <summary>
         /// Returns the counts of all colors that are used in the first frames of the given images.
         /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>
-        public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<Image<Rgba32>> images, Func<Rgba32, bool> ignoreColor)
-        {
-            var colorHistogram = new Dictionary<Rgba32, int>();
-            foreach (var image in images)
-                UpdateColorHistogram(colorHistogram, image, ignoreColor);
+        public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<Image<Rgba32>> images, Func<int, int, Rgba32, bool> ignorePixel)
+            => GetColorHistogram(images.Select(image => image.Frames[0]), ignorePixel);
 
-            return colorHistogram;
-        }
-
-        /// <summary>
-        /// Returns the counts of all colors that are used in the given image frames.
-        /// Only the R, G and B channels are taken into account, alpha is ignored.
-        /// </summary>
+        /// <inheritdoc cref="GetColorHistogram(IEnumerable{ImageFrame{Rgba32}}, Func{int, int, Rgba32, bool})"/>
         public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<ImageFrame<Rgba32>> imageFrames, Func<Rgba32, bool> ignoreColor)
         {
             var colorHistogram = new Dictionary<Rgba32, int>();
@@ -86,17 +81,27 @@ namespace Shared
         }
 
         /// <summary>
-        /// Adds the counts of all colors that are used in the first frame of the given image to the given color histogram.
+        /// Returns the counts of all colors that are used in the given image frames.
         /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>
-        public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, Image<Rgba32> image, Func<Rgba32, bool> ignoreColor)
-            => UpdateColorHistogram(colorHistogram, image.Frames[0], ignoreColor);
+        public static IDictionary<Rgba32, int> GetColorHistogram(IEnumerable<ImageFrame<Rgba32>> imageFrames, Func<int, int, Rgba32, bool> ignorePixel)
+        {
+            var colorHistogram = new Dictionary<Rgba32, int>();
+            foreach (var imageFrame in imageFrames)
+                UpdateColorHistogram(colorHistogram, imageFrame, ignorePixel);
+
+            return colorHistogram;
+        }
+
+        /// <inheritdoc cref="UpdateColorHistogram(IDictionary{Rgba32, int}, ImageFrame{Rgba32}, Func{int, int, Rgba32, bool})"/>
+        public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, ImageFrame<Rgba32> imageFrame, Func<Rgba32, bool> ignoreColor)
+            => UpdateColorHistogram(colorHistogram, imageFrame, (x, y, color) => ignoreColor(color));
 
         /// <summary>
         /// Adds the counts of all colors that are used in the given image frame to the given color histogram.
         /// Only the R, G and B channels are taken into account, alpha is ignored.
         /// </summary>
-        public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, ImageFrame<Rgba32> imageFrame, Func<Rgba32, bool> ignoreColor)
+        public static void UpdateColorHistogram(IDictionary<Rgba32, int> colorHistogram, ImageFrame<Rgba32> imageFrame, Func<int, int, Rgba32, bool> ignorePixel)
         {
             imageFrame.ProcessPixelRows(accessor =>
             {
@@ -106,7 +111,7 @@ namespace Shared
                     for (int x = 0; x < imageFrame.Width; x++)
                     {
                         var color = rowSpan[x];
-                        if (ignoreColor(color))
+                        if (ignorePixel(x, y, color))
                             continue;
 
                         color.A = 255;  // Ignore alpha

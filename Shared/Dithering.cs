@@ -13,16 +13,24 @@ namespace Shared
 
     public static class Dithering
     {
-        /// <summary>
-        /// Creates 8-bit indexed image data from the first frame of the input image and the given palette, without any form of dithering.
-        /// </summary>
+        /// <inheritdoc cref="None(Image{Rgba32}, Rgba32[], Func{int, int, Rgba32, int})"/>
         public static byte[] None(Image<Rgba32> image, Func<Rgba32, int> getColorIndex)
             => None(image.Frames[0], getColorIndex);
 
         /// <summary>
+        /// Creates 8-bit indexed image data from the first frame of the input image and the given palette, without any form of dithering.
+        /// </summary>
+        public static byte[] None(Image<Rgba32> image, Func<int, int, Rgba32, int> getColorIndex)
+            => None(image.Frames[0], getColorIndex);
+
+        /// <inheritdoc cref="None(ImageFrame{Rgba32}, Rgba32[], Func{int, int, Rgba32, int})"/>
+        public static byte[] None(ImageFrame<Rgba32> image, Func<Rgba32, int> getColorIndex)
+            => None(image, (x, y, color) => getColorIndex(color));
+
+        /// <summary>
         /// Creates 8-bit indexed image data from the input image frame and the given palette, without any form of dithering.
         /// </summary>
-        public static byte[] None(ImageFrame<Rgba32> image, Func<Rgba32, int> getColorIndex)
+        public static byte[] None(ImageFrame<Rgba32> image, Func<int, int, Rgba32, int> getColorIndex)
         {
             var output = new byte[image.Width * image.Height];
             image.ProcessPixelRows(accessor =>
@@ -33,7 +41,7 @@ namespace Shared
                     for (int x = 0; x < image.Width; x++)
                     {
                         var color = rowSpan[x];
-                        output[y * image.Width + x] = (byte)getColorIndex(color);
+                        output[y * image.Width + x] = (byte)getColorIndex(x, y, color);
                     }
                 }
             });
@@ -41,29 +49,42 @@ namespace Shared
         }
 
 
-        /// <summary>
-        /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the first frame of the input image and the given palette.
-        /// Error diffusion can be limited to make the dithering effect more subtle.
-        /// An optional predicate can be provided to skip dithering for certain colors, which can be used to prevent error diffusion from interfering with color-key transparency.
-        /// </summary>
+        /// <inheritdoc cref="FloydSteinberg(Image{Rgba32}, Rgba32[], Func{int, int, Rgba32, int}, float, Func{int, int, Rgba32, bool}?)"/>
         public static byte[] FloydSteinberg(Image<Rgba32> image, Rgba32[] palette, Func<Rgba32, int> getColorIndex, float ditherScale = 1f, Func<Rgba32, bool>? skipDithering = null)
             => FloydSteinberg(image.Frames[0], palette, getColorIndex, ditherScale, skipDithering);
 
         /// <summary>
-        /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the input image frame and the given palette.
+        /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the first frame of the input image and the given palette.
         /// Error diffusion can be limited to make the dithering effect more subtle.
-        /// An optional predicate can be provided to skip dithering for certain colors, which can be used to prevent error diffusion from interfering with color-key transparency.
+        /// An optional predicate can be provided to skip dithering for certain pixels or colors, which can be used to prevent error diffusion from interfering with color-key transparency.
         /// </summary>
+        public static byte[] FloydSteinberg(Image<Rgba32> image, Rgba32[] palette, Func<int, int, Rgba32, int> getColorIndex, float ditherScale = 1f, Func<int, int, Rgba32, bool>? skipDithering = null)
+            => FloydSteinberg(image.Frames[0], palette, getColorIndex, ditherScale, skipDithering);
+
+        /// <inheritdoc cref="FloydSteinberg(ImageFrame{Rgba32}, Rgba32[], Func{int, int, Rgba32, int}, float, Func{int, int, Rgba32, bool}?)"/>
         public static byte[] FloydSteinberg(
             ImageFrame<Rgba32> image,
             Rgba32[] palette,
             Func<Rgba32, int> getColorIndex,
             float ditherScale = 1f,
             Func<Rgba32, bool>? skipDithering = null)
+            => FloydSteinberg(image, palette, (x, y, color) => getColorIndex(color), ditherScale, skipDithering is null ? null : (x, y, color) => skipDithering(color));
+
+        /// <summary>
+        /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the input image frame and the given palette.
+        /// Error diffusion can be limited to make the dithering effect more subtle.
+        /// An optional predicate can be provided to skip dithering for certain pixels or colors, which can be used to prevent error diffusion from interfering with color-key transparency.
+        /// </summary>
+        public static byte[] FloydSteinberg(
+            ImageFrame<Rgba32> image,
+            Rgba32[] palette,
+            Func<int, int, Rgba32, int> getColorIndex,
+            float ditherScale = 1f,
+            Func<int, int, Rgba32, bool>? skipDithering = null)
         {
             var output = new byte[image.Width * image.Height];
 
-            ditherScale = Math.Max(0f, Math.Min(ditherScale, 1f));
+            ditherScale = Math.Clamp(ditherScale, 0f, 1f);
             var lastRowErrors = new int[image.Width, 3];
             var currentRowErrors = new int[image.Width, 3];
             image.ProcessPixelRows(accessor =>
@@ -74,13 +95,13 @@ namespace Shared
                     for (int x = 0; x < image.Width; x++)
                     {
                         var sourceColor = rowSpan[x];
-                        if (skipDithering?.Invoke(sourceColor) == true)
+                        if (skipDithering?.Invoke(x, y, sourceColor) == true)
                         {
                             currentRowErrors[x, 0] = 0;
                             currentRowErrors[x, 1] = 0;
                             currentRowErrors[x, 2] = 0;
 
-                            output[y * image.Width + x] = (byte)getColorIndex(sourceColor);
+                            output[y * image.Width + x] = (byte)getColorIndex(x, y, sourceColor);
                             continue;
                         }
 
@@ -110,7 +131,7 @@ namespace Shared
                             (byte)Math.Max(0, Math.Min(sourceColor.G + (int)error[1], 255)),
                             (byte)Math.Max(0, Math.Min(sourceColor.B + (int)error[2], 255)));
 
-                        var paletteIndex = getColorIndex(errorCorrectedColor);
+                        var paletteIndex = getColorIndex(x, y, errorCorrectedColor);
                         var outputColor = palette[paletteIndex];
                         currentRowErrors[x, 0] = (int)((sourceColor.R - outputColor.R) * ditherScale);
                         currentRowErrors[x, 1] = (int)((sourceColor.G - outputColor.G) * ditherScale);
