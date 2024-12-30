@@ -201,7 +201,7 @@ namespace WadMaker.Settings
 
         private static bool TryParseTextureType(string str, out TextureType textureType)
         {
-            switch (str.ToLowerInvariant())
+            switch (str)
             {
                 case "qpic": textureType = TextureType.SimpleTexture; return true;
                 case "font": textureType = TextureType.Font; return true;
@@ -211,7 +211,7 @@ namespace WadMaker.Settings
 
         private static bool TryParseMipmapLevel(string str, out MipmapLevel mipmapLevel)
         {
-            switch (str.ToLowerInvariant())
+            switch (str)
             {
                 case "mipmap1": mipmapLevel = MipmapLevel.Mipmap1; return true;
                 case "mipmap2": mipmapLevel = MipmapLevel.Mipmap2; return true;
@@ -222,7 +222,7 @@ namespace WadMaker.Settings
 
         private static bool TryParseWaterFogColor(string str, out Rgba32 waterFogColor)
         {
-            if (str.StartsWith("fog", StringComparison.InvariantCultureIgnoreCase))
+            if (str.StartsWith("fog"))
             {
                 var parts = str.Substring(3)
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries)
