@@ -4,7 +4,6 @@ using System.Diagnostics;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using System.Text.RegularExpressions;
 using WadMaker.Settings;
 using Shared.FileSystem;
 using FileInfo = Shared.FileSystem.FileInfo;
@@ -64,93 +63,68 @@ namespace WadMaker
                 {
                     var textureName = textureSourceFileGroup.Key;
                     var textureSourceFiles = textureSourceFileGroup.ToArray();
-
-                    // Does this texture have a valid name?
-                    if (!IsValidTextureName(textureName))
-                    {
-                        logger.Log($"- WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
-                        continue;
-                    }
-                    else if (textureName.Length > 15)
-                    {
-                        logger.Log($"- WARNING: The name '{textureName}' is too long ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
-                        continue;
-                    }
-
-                    // Is the main image missing (e.g. only mipmap files have been provided, but not a full-size image)?
-                    if (!textureSourceFiles.Any(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main))
-                    {
-                        logger.Log($"- WARNING: missing main file for '{textureName}' ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
-                        continue;
-                    }
-
-                    // Do we have conflicting input files (e.g. "foo.png" and "foo.jpg", or multiple images for the same mipmap level)?
-                    if (textureSourceFiles.Length > 1)
-                    {
-                        var hasDuplicateMipmaps = textureSourceFiles
-                            .GroupBy(file => file.Settings.MipmapLevel ?? MipmapLevel.Main)
-                            .Any(mipmapGroup => mipmapGroup.Count() > 1);
-                        if (hasDuplicateMipmaps)
-                        {
-                            logger.Log($"- WARNING: conflicting input files detected for '{textureName}' ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping files.");
-                            continue;
-                        }
-                    }
-
-                    // Can we skip this texture?
                     var isExistingTexture = existingTextureNames.Contains(textureName);
-                    if (doIncrementalUpdate && isExistingTexture)
-                    {
-                        if (!HasBeenModified(textureName, textureSourceFiles, wadMakingHistory))
-                        {
-                            successfulTextureInputs[textureName] = textureSourceFiles;
 
-                            logger.Log($"- No changes detected for '{textureName}', skipping update.");
-                            continue;
+                    // Log a warning and skip this texture if anything is wrong with the input files:
+                    var isValid = VerifyTextureSourceFiles(textureName, textureSourceFiles, logger);
+                    var hasError = false;
+                    if (isValid)
+                    {
+                        // Can we skip this texture (when updating an existing wad file)?
+                        if (doIncrementalUpdate && isExistingTexture)
+                        {
+                            if (!HasBeenModified(textureName, textureSourceFiles, wadMakingHistory))
+                            {
+                                successfulTextureInputs[textureName] = textureSourceFiles;
+
+                                logger.Log($"- No changes detected for '{textureName}', skipping update.");
+                                continue;
+                            }
+                        }
+
+
+                        try
+                        {
+                            // Build the texture and add it to the wad file:
+                            var texture = MakeTexture(textureName, textureSourceFiles, conversionOutputDirectory, isDecalsWad, logger);
+
+                            if (doIncrementalUpdate && isExistingTexture)
+                            {
+                                // Update (replace) existing texture:
+                                var index = wad.Textures.FindIndex(texture => texture.Name == textureName);
+                                if (index != -1)
+                                    wad.Textures[index] = texture;
+
+                                successfulTextureInputs[textureName] = textureSourceFiles;
+                                updatedTexturesCount += 1;
+
+                                logger.Log($"- Updated texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
+                            }
+                            else
+                            {
+                                // Add new texture:
+                                wad.Textures.Add(texture);
+
+                                successfulTextureInputs[textureName] = textureSourceFiles;
+                                addedTexturesCount += 1;
+
+                                logger.Log($"- Added texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Log($"- ERROR: failed to build '{textureName}': {ex.GetType().Name}: '{ex.Message}'.");
+                            errorCount += 1;
+                            hasError = true;
                         }
                     }
 
-
-                    try
+                    // If the texture was not built successfully, remove the existing texture if we're doing an incremental update:
+                    if ((!isValid || hasError) && doIncrementalUpdate && isExistingTexture)
                     {
-                        // Build the texture and add it to the wad file:
-                        var texture = MakeTexture(textureName, textureSourceFiles, conversionOutputDirectory, isDecalsWad, logger);
-
-                        if (doIncrementalUpdate && isExistingTexture)
-                        {
-                            // Update (replace) existing texture:
-                            var index = wad.Textures.FindIndex(texture => texture.Name == textureName);
-                            if (index != -1)
-                                wad.Textures[index] = texture;
-
-                            successfulTextureInputs[textureName] = textureSourceFiles;
-                            updatedTexturesCount += 1;
-
-                            logger.Log($"- Updated texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
-                        }
-                        else
-                        {
-                            // Add new texture:
-                            wad.Textures.Add(texture);
-
-                            successfulTextureInputs[textureName] = textureSourceFiles;
-                            addedTexturesCount += 1;
-
-                            logger.Log($"- Added texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Log($"- ERROR: failed to build '{textureName}': {ex.GetType().Name}: '{ex.Message}'.");
-                        errorCount += 1;
-
-                        // Remove the existing texture if we're doing an incremental update:
-                        if (doIncrementalUpdate && isExistingTexture)
-                        {
-                            var index = wad.Textures.FindIndex(texture => texture.Name == textureName);
-                            if (index != -1)
-                                wad.Textures.RemoveAt(index);
-                        }
+                        var index = wad.Textures.FindIndex(texture => texture.Name == textureName);
+                        if (index != -1)
+                            wad.Textures.RemoveAt(index);
                     }
                 }
 
@@ -226,6 +200,47 @@ namespace WadMaker
                         yield return path;
                 }
             }
+        }
+
+        /// <summary>
+        /// Check wether the texture name is valid, whether all required files are provided, and whether there are any duplicate input files.
+        /// </summary>
+        private static bool VerifyTextureSourceFiles(string textureName, TextureSourceFileInfo[] textureSourceFiles, Logger logger)
+        {
+            // Does this texture have a valid name?
+            if (!IsValidTextureName(textureName))
+            {
+                logger.Log($"- WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
+                return false;
+            }
+            else if (textureName.Length > 15)
+            {
+                logger.Log($"- WARNING: The name '{textureName}' is too long ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
+                return false;
+            }
+
+            // Is the main image missing (e.g. only mipmap files have been provided, but not a full-size image)?
+            if (!textureSourceFiles.Any(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main))
+            {
+                logger.Log($"- WARNING: missing main file for '{textureName}' ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
+                return false;
+            }
+
+            // Do we have conflicting input files (e.g. "foo.png" and "foo.jpg", or multiple images for the same mipmap level)?
+            if (textureSourceFiles.Length > 1)
+            {
+                var hasDuplicateMipmaps = textureSourceFiles
+                    .GroupBy(file => file.Settings.MipmapLevel ?? MipmapLevel.Main)
+                    .Any(mipmapGroup => mipmapGroup.Count() > 1);
+                if (hasDuplicateMipmaps)
+                {
+                    logger.Log($"- WARNING: conflicting input files detected for '{textureName}' ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping files.");
+                    return false;
+                }
+            }
+
+            // Everything is looking good so far:
+            return true;
         }
 
         // TODO: Really allow all characters in this range? Aren't there some characters that may cause trouble (in .map files, for example, such as commas, parenthesis, etc.?)
@@ -312,9 +327,7 @@ namespace WadMaker
                 }
 
                 // Verify main image size:
-                if (mainImage is null)
-                    throw new InvalidDataException($"No main file provided for texture '{textureName}'.");
-                else if (mainImage.Width % 16 != 0 || mainImage.Height % 16 != 0)
+                if (mainImage.Width % 16 != 0 || mainImage.Height % 16 != 0)
                     throw new InvalidDataException($"Texture '{textureName}' is {mainImage.Width}x{mainImage.Height}. Both width and height must be a multiple of 16.");
 
                 // Verify mipmap sizes:
