@@ -13,9 +13,6 @@ namespace WadMaker
 {
     public static class WadMaking
     {
-        private static Regex AnimatedTextureNameRegex = new Regex(@"^\+[0-9A-J]");
-
-
         public static void MakeWad(string inputDirectory, string outputWadFilePath, bool doFullRebuild, bool includeSubDirectories, Logger logger)
         {
             if (File.Exists(inputDirectory))
@@ -332,9 +329,9 @@ namespace WadMaker
                 // Create the texture:
                 if (isDecalsWad)
                     return CreateDecalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
-                else if (textureName.StartsWith("{"))
+                else if (TextureName.IsTransparent(textureName))
                     return CreateTransparentTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
-                else if (textureName.StartsWith("!"))
+                else if (TextureName.IsWater(textureName))
                     return CreateWaterTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
                 else
                     return CreateNormalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
@@ -545,7 +542,7 @@ namespace WadMaker
                 .ToArray();
 
             // Create texture data (disable dithering for animated textures in an attempt to reduce 'flickering' between frames):
-            var isAnimatedTexture = AnimatedTextureNameRegex.IsMatch(textureName);
+            var isAnimatedTexture = TextureName.IsAnimated(textureName);
             var mainTextureData = CreateTextureData(mainImage, palette, colorIndexMappingCache, textureSettings, color => false, disableDithering: isAnimatedTexture);
             var mipmapTextureData = mipmaps
                 .Select(image => CreateTextureData(image, palette, colorIndexMappingCache, textureSettings, color => false, disableDithering: isAnimatedTexture))
