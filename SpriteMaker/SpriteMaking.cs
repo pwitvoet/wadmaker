@@ -556,29 +556,10 @@ namespace SpriteMaker
             {
                 default:
                 case DitheringAlgorithm.None:
-                    return ApplyPaletteWithoutDithering();
+                    return Dithering.None(imageFrame, getColorIndex);
 
                 case DitheringAlgorithm.FloydSteinberg:
                     return Dithering.FloydSteinberg(imageFrame, palette, getColorIndex, spriteSettings.DitherScale ?? 0.75f, isTransparent);
-            }
-
-
-            byte[] ApplyPaletteWithoutDithering()
-            {
-                var textureData = new byte[imageFrame.Width * imageFrame.Height];
-                imageFrame.ProcessPixelRows(accessor =>
-                {
-                    for (int y = 0; y < imageFrame.Height; y++)
-                    {
-                        var rowSpan = accessor.GetRowSpan(y);
-                        for (int x = 0; x < imageFrame.Width; x++)
-                        {
-                            var color = rowSpan[x];
-                            textureData[y * imageFrame.Width + x] = (byte)getColorIndex(color);
-                        }
-                    }
-                });
-                return textureData;
             }
         }
 

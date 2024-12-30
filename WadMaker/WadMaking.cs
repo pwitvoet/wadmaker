@@ -371,23 +371,10 @@ namespace WadMaker
             byte[] CreateDecalTextureData(Image<Rgba32> image)
             {
                 var mode = textureSettings.DecalTransparencySource ?? DecalTransparencySource.AlphaChannel;
-                var getPaletteIndex = (mode == DecalTransparencySource.AlphaChannel) ? (Func<Rgba32, byte>)(color => color.A) :
-                                                                                       (Func<Rgba32, byte>)(color => (byte)((color.R + color.G + color.B) / 3));
-
-                var data = new byte[image.Width * image.Height];
-                image.ProcessPixelRows(accessor =>
-                {
-                    for (int y = 0; y < image.Height; y++)
-                    {
-                        var rowSpan = accessor.GetRowSpan(y);
-                        for (int x = 0; x < image.Width; x++)
-                        {
-                            var color = rowSpan[x];
-                            data[y * image.Width + x] = getPaletteIndex(color);
-                        }
-                    }
-                });
-                return data;
+                if (mode == DecalTransparencySource.AlphaChannel)
+                    return Dithering.None(image, color => color.A);
+                else
+                    return Dithering.None(image, color => (color.R + color.G + color.B) / 3);
             }
         }
 
@@ -617,35 +604,15 @@ namespace WadMaker
             bool disableDithering)
         {
             var getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent);
-
             var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (disableDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             switch (ditheringAlgorithm)
             {
                 default:
                 case DitheringAlgorithm.None:
-                    return ApplyPaletteWithoutDithering();
+                    return Dithering.None(image, getColorIndex);
 
                 case DitheringAlgorithm.FloydSteinberg:
                     return Dithering.FloydSteinberg(image, palette, getColorIndex, textureSettings.DitherScale ?? 0.75f, isTransparent);
-            }
-
-
-            byte[] ApplyPaletteWithoutDithering()
-            {
-                var textureData = new byte[image.Width * image.Height];
-                image.ProcessPixelRows(accessor =>
-                {
-                    for (int y = 0; y < image.Height; y++)
-                    {
-                        var rowSpan = accessor.GetRowSpan(y);
-                        for (int x = 0; x < image.Width; x++)
-                        {
-                            var color = rowSpan[x];
-                            textureData[y * image.Width + x] = (byte)getColorIndex(color);
-                        }
-                    }
-                });
-                return textureData;
             }
         }
 

@@ -14,6 +14,34 @@ namespace Shared
     public static class Dithering
     {
         /// <summary>
+        /// Creates 8-bit indexed image data from the first frame of the input image and the given palette, without any form of dithering.
+        /// </summary>
+        public static byte[] None(Image<Rgba32> image, Func<Rgba32, int> getColorIndex)
+            => None(image.Frames[0], getColorIndex);
+
+        /// <summary>
+        /// Creates 8-bit indexed image data from the input image frame and the given palette, without any form of dithering.
+        /// </summary>
+        public static byte[] None(ImageFrame<Rgba32> image, Func<Rgba32, int> getColorIndex)
+        {
+            var output = new byte[image.Width * image.Height];
+            image.ProcessPixelRows(accessor =>
+            {
+                for (int y = 0; y < image.Height; y++)
+                {
+                    var rowSpan = accessor.GetRowSpan(y);
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        var color = rowSpan[x];
+                        output[y * image.Width + x] = (byte)getColorIndex(color);
+                    }
+                }
+            });
+            return output;
+        }
+
+
+        /// <summary>
         /// Uses Floyd-Steinberg dithering to create 8-bit indexed image data from the first frame of the input image and the given palette.
         /// Error diffusion can be limited to make the dithering effect more subtle.
         /// An optional predicate can be provided to skip dithering for certain colors, which can be used to prevent error diffusion from interfering with color-key transparency.
