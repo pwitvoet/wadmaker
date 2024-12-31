@@ -104,9 +104,9 @@ namespace WadMaker.Settings
                 {
                     default: reader.SkipValue(); break;
                     case "path": path = reader.ReadString(); break;
-                    case "file-size": fileSize = (int)reader.ReadNumber(); break;
+                    case "file-size": fileSize = (int)reader.ReadInt64(); break;
                     case "file-hash": fileHash = FileHash.Parse(reader.ReadString() ?? ""); break;
-                    case "last-modified": lastModified = DateTimeOffset.FromUnixTimeMilliseconds(reader.ReadNumber()); break;
+                    case "last-modified": lastModified = DateTimeOffset.FromUnixTimeMilliseconds(reader.ReadInt64()); break;
                 }
             }
             reader.ReadEndObject();
@@ -144,9 +144,9 @@ namespace WadMaker.Settings
                 {
                     default: reader.SkipValue(); break;
                     case "path": path = reader.ReadString(); break;
-                    case "file-size": fileSize = (int)reader.ReadNumber(); break;
+                    case "file-size": fileSize = (int)reader.ReadInt64(); break;
                     case "file-hash": fileHash = FileHash.Parse(reader.ReadString() ?? ""); break;
-                    case "last-modified": lastModified = DateTimeOffset.FromUnixTimeMilliseconds(reader.ReadNumber()); break;
+                    case "last-modified": lastModified = DateTimeOffset.FromUnixTimeMilliseconds(reader.ReadInt64()); break;
                     case "settings": settings = ReadTextureSettings(ref reader); break;
                 }
             }
@@ -190,8 +190,8 @@ namespace WadMaker.Settings
                     case "texture-type": settings.TextureType = Serialization.ReadTextureType(reader.ReadString()); break;
                     case "mipmap-level": settings.MipmapLevel = Serialization.ReadMipmapLevel(reader.ReadString()); break;
                     case "dithering-algorithm": settings.DitheringAlgorithm = Serialization.ReadDitheringAlgorithm(reader.ReadString()); break;
-                    case "dither-scale": settings.DitherScale = reader.ReadNumber(); break;
-                    case "transparency-threshold": settings.TransparencyThreshold = (int)reader.ReadNumber(); break;
+                    case "dither-scale": settings.DitherScale = reader.ReadFloat(); break;
+                    case "transparency-threshold": settings.TransparencyThreshold = (int)reader.ReadInt64(); break;
                     case "transparency-color": settings.TransparencyColor = Serialization.ReadRgba32(reader.ReadString()); break;
                     case "water-fog-color": settings.WaterFogColor = Serialization.ReadRgba32(reader.ReadString()); break;
                     case "decal-transparency-source": settings.DecalTransparencySource = Serialization.ReadDecalTransparencySource(reader.ReadString()); break;

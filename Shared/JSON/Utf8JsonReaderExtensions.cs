@@ -44,10 +44,18 @@ namespace Shared.JSON
             return value;
         }
 
-        public static long ReadNumber(this ref Utf8JsonReader reader)
+        public static long ReadInt64(this ref Utf8JsonReader reader)
         {
             if (reader.TokenType != JsonTokenType.Number) throw new JsonException($"Expected number but found {reader.TokenType}.");
             var value = reader.GetInt64();
+            reader.Read();
+            return value;
+        }
+
+        public static float ReadFloat(this ref Utf8JsonReader reader)
+        {
+            if (reader.TokenType != JsonTokenType.Number) throw new JsonException($"Expected number but found {reader.TokenType}.");
+            var value = reader.GetSingle();
             reader.Read();
             return value;
         }
