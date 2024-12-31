@@ -8,7 +8,7 @@ namespace WadMaker
 {
     public static class TextureExtracting
     {
-        public static void ExtractTextures(string inputFilePath, string outputDirectory, bool extractMipmaps, bool overwriteExistingFiles, Logger logger)
+        public static void ExtractTextures(string inputFilePath, string outputDirectory, bool extractMipmaps, bool noFullbrightMasks, bool overwriteExistingFiles, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -34,14 +34,17 @@ namespace WadMaker
             var isDecalsWad = Path.GetFileName(inputFilePath).ToLowerInvariant() == "decals.wad";
             foreach (var texture in textures)
             {
+                var isFullbrightTexture = !isDecalsWad && TextureName.IsFullbright(texture.Name);
+
                 var maxMipmap = (texture.Type == TextureType.MipmapTexture && extractMipmaps) ? 4 : 1;
                 for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
                 {
                     try
                     {
-                        var filePath = Path.Combine(outputDirectory, texture.Name + ".png");
+                        var baseFilePath = Path.Combine(outputDirectory, texture.Name + ".png");
+
                         var fileSettings = GetOutputFileTextureSettings(texture, mipmap);
-                        filePath = WadMakingSettings.InsertTextureSettingsIntoFilename(filePath, fileSettings);
+                        var filePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
 
                         if (!overwriteExistingFiles && File.Exists(filePath))
                         {
@@ -55,6 +58,22 @@ namespace WadMaker
                             {
                                 image.SaveAsPng(filePath);
                                 imageFilesCreated += 1;
+                            }
+                        }
+
+                        // Create fullbright mask images for textures/mipmaps that contain fullbright pixels:
+                        if (isFullbrightTexture && !noFullbrightMasks && texture.GetImageData(mipmap)?.Any(index => index >= 224) == true)
+                        {
+                            using (var image = TextureToFullbrightMaskImage(texture, mipmap))
+                            {
+                                if (image != null)
+                                {
+                                    fileSettings.IsFullbrightMask = true;
+                                    var fullbrightFilePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
+
+                                    image.SaveAsPng(fullbrightFilePath);
+                                    imageFilesCreated += 1;
+                                }
                             }
                         }
                     }
@@ -133,6 +152,39 @@ namespace WadMaker
                     {
                         var paletteIndex = imageData[y * width + x];
                         if (paletteIndex == 255 && hasColorKey)
+                        {
+                            rowSpan[x] = new Rgba32(0, 0, 0, 0);
+                        }
+                        else
+                        {
+                            rowSpan[x] = texture.Palette[paletteIndex];
+                        }
+                    }
+                }
+            });
+
+            return image;
+        }
+
+        static Image<Rgba32>? TextureToFullbrightMaskImage(Texture texture, int mipmap = 0)
+        {
+            var imageData = texture.GetImageData(mipmap);
+            if (imageData == null)
+                return null;
+
+            var width = texture.Width >> mipmap;
+            var height = texture.Height >> mipmap;
+
+            var image = new Image<Rgba32>(width, height);
+            image.ProcessPixelRows(accessor =>
+            {
+                for (int y = 0; y < image.Height; y++)
+                {
+                    var rowSpan = accessor.GetRowSpan(y);
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        var paletteIndex = imageData[y * width + x];
+                        if (paletteIndex < 224)
                         {
                             rowSpan[x] = new Rgba32(0, 0, 0, 0);
                         }

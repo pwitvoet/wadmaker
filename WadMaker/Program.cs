@@ -9,24 +9,25 @@ namespace WadMaker
     class ProgramSettings
     {
         // Build settings:
-        public bool FullRebuild { get; set; }               // -full        forces a full rebuild instead of an incremental one
-        public bool IncludeSubDirectories { get; set; }     // -subdirs     also include images in sub-directories
+        public bool FullRebuild { get; set; }               // -full            Forces a full rebuild instead of an incremental one
+        public bool IncludeSubDirectories { get; set; }     // -subdirs         Also include images in sub-directories
 
         // Extract settings:
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(OutputDirectory))]
-        public bool Extract { get; set; }                   //              Texture extraction mode is enabled when the first argument (path) is a wad or bsp file.
-        public bool ExtractMipmaps { get; set; }            // -mipmaps     also extract mipmaps
-        public bool OverwriteExistingFiles { get; set; }    // -overwrite   extract mode only, enables overwriting of existing image files (off by default)
+        public bool Extract { get; set; }                   //                  Texture extraction mode is enabled when the first argument (path) is a wad or bsp file.
+        public bool ExtractMipmaps { get; set; }            // -mipmaps         Also extract mipmaps
+        public bool NoFullbrightMasks { get; set; }         // -nofullbright    Do not extract fullbright masks
+        public bool OverwriteExistingFiles { get; set; }    // -overwrite       Extract mode only, enables overwriting of existing image files (off by default)
 
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
-        public bool ExtractToWad { get; set; }              //              This extraction mode is enabled when the first argument is a bsp file path, and the second a wad file path.
+        public bool ExtractToWad { get; set; }              //                  This extraction mode is enabled when the first argument is a bsp file path, and the second a wad file path.
 
         // Bsp settings:
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
-        public bool RemoveEmbeddedTextures { get; set; }    // -remove      removes embedded textures from the given bsp file
+        public bool RemoveEmbeddedTextures { get; set; }    // -remove          Removes embedded textures from the given bsp file
 
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(ExtraInputFilePath))]
@@ -68,7 +69,7 @@ namespace WadMaker
                 var logger = new Logger(Log);
                 if (settings.Extract)
                 {
-                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.OverwriteExistingFiles, logger);
+                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.NoFullbrightMasks, settings.OverwriteExistingFiles, logger);
                 }
                 else if (settings.ExtractToWad)
                 {
@@ -117,6 +118,7 @@ namespace WadMaker
                     case "-full": settings.FullRebuild = true; break;
                     case "-subdirs": settings.IncludeSubDirectories = true; break;
                     case "-mipmaps": settings.ExtractMipmaps = true; break;
+                    case "-nofullbright": settings.NoFullbrightMasks = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
                     case "-remove": settings.RemoveEmbeddedTextures = true; break;
                     case "-nologfile": settings.DisableFileLogging = true; break;
