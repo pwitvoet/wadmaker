@@ -42,6 +42,25 @@ namespace WadMaker.Settings
 
 
         /// <summary>
+        /// When true, the source image is a fullbright pixel mask image.
+        /// Fullbright mask images should be transparent, except for pixels that must be full-bright in game.
+        /// </summary>
+        public bool? IsFullbrightMask { get; set; }
+
+        /// <summary>
+        /// When true, the resulting texture will not be a fullbright texture, even if the texture name starts with a '~'.
+        /// This means that the full palette is available, but the texture may not look right in an engine that supports fullbright textures.
+        /// </summary>
+        public bool? NoFullbright { get; set; }
+
+        /// <summary>
+        /// Fullbright mask pixels with an alpha value equal to or above this value will be treated as fullbright pixels.
+        /// Defaults to 128.
+        /// </summary>
+        public int? FullbrightAlphaThreshold { get; set; }
+
+
+        /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed texture.
         /// Defaults to <see cref="DitheringAlgorithm.FloydSteinberg"/> for normal textures,
         /// and to <see cref="DitheringAlgorithm.None"/> for animated textures (to prevent 'flickering' animations).
@@ -113,6 +132,9 @@ namespace WadMaker.Settings
             if (overrideSettings.Ignore != null)                    Ignore = overrideSettings.Ignore;
             if (overrideSettings.TextureType != null)               TextureType = overrideSettings.TextureType;
             if (overrideSettings.MipmapLevel != null)               MipmapLevel = overrideSettings.MipmapLevel;
+            if (overrideSettings.IsFullbrightMask != null)          IsFullbrightMask = overrideSettings.IsFullbrightMask;
+            if (overrideSettings.NoFullbright != null)              NoFullbright = overrideSettings.NoFullbright;
+            if (overrideSettings.FullbrightAlphaThreshold != null)  FullbrightAlphaThreshold = overrideSettings.FullbrightAlphaThreshold;
             if (overrideSettings.DitheringAlgorithm != null)        DitheringAlgorithm = overrideSettings.DitheringAlgorithm;
             if (overrideSettings.DitherScale != null)               DitherScale = overrideSettings.DitherScale;
             if (overrideSettings.TransparencyThreshold != null)     TransparencyThreshold = overrideSettings.TransparencyThreshold;
@@ -131,6 +153,9 @@ namespace WadMaker.Settings
                 Ignore == other.Ignore &&
                 TextureType == other.TextureType &&
                 MipmapLevel == other.MipmapLevel &&
+                IsFullbrightMask == other.IsFullbrightMask &&
+                NoFullbright == other.NoFullbright &&
+                FullbrightAlphaThreshold == other.FullbrightAlphaThreshold &&
                 DitheringAlgorithm == other.DitheringAlgorithm &&
                 DitherScale == other.DitherScale &&
                 TransparencyThreshold == other.TransparencyThreshold &&

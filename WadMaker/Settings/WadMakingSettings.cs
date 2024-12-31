@@ -176,6 +176,8 @@ namespace WadMaker.Settings
             {
                 if (TryParseTextureType(segment, out var textureType))
                     settings.TextureType = textureType;
+                else if (IsFullbrightMaskSelector(segment))
+                    settings.IsFullbrightMask = true;
                 else if (TryParseMipmapLevel(segment, out var mipmapLevel))
                     settings.MipmapLevel = mipmapLevel;
                 else if (TryParseWaterFogColor(segment, out var waterFogColor))
@@ -191,6 +193,8 @@ namespace WadMaker.Settings
 
             if (settings.TextureType != null && settings.TextureType != TextureType.MipmapTexture)
                 sb.Append("." + Serialization.ToString(settings.TextureType.Value));
+            if (settings.IsFullbrightMask == true)
+                sb.Append(".fullbright");
             if (settings.MipmapLevel != null && settings.MipmapLevel != MipmapLevel.Main)
                 sb.Append($".mipmap{(int)settings.MipmapLevel}");
             if (settings.WaterFogColor != null)
@@ -208,6 +212,8 @@ namespace WadMaker.Settings
                 default: textureType = default; return false;
             }
         }
+
+        private static bool IsFullbrightMaskSelector(string str) => str == "fullbright";
 
         private static bool TryParseMipmapLevel(string str, out MipmapLevel mipmapLevel)
         {
@@ -244,6 +250,8 @@ namespace WadMaker.Settings
 
         const string IgnoreKey = "ignore";
         const string TextureTypeKey = "texture-type";
+        const string NoFullbrightKey = "no-fullbright";
+        const string FullbrightAlphaThresholdKey = "fullbright-alpha-threshold";
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
         const string TransparencyThresholdKey = "transparency-threshold";
@@ -281,6 +289,16 @@ namespace WadMaker.Settings
                     case TextureTypeKey:
                         RequireToken(":");
                         textureSettings.TextureType = ParseToken(Serialization.ReadTextureType, "texture type");
+                        break;
+
+                    case NoFullbrightKey:
+                        RequireToken(":");
+                        textureSettings.NoFullbright = ParseToken(bool.Parse);
+                        break;
+
+                    case FullbrightAlphaThresholdKey:
+                        RequireToken(":");
+                        textureSettings.FullbrightAlphaThreshold = ParseToken(byte.Parse, "fullbright alpha threshold");
                         break;
 
                     case DitheringAlgorithmKey:

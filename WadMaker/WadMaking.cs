@@ -220,22 +220,52 @@ namespace WadMaker
             }
 
             // Is the main image missing (e.g. only mipmap files have been provided, but not a full-size image)?
-            if (!textureSourceFiles.Any(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main))
+            var normalSourceFiles = textureSourceFiles.Where(file => file.Settings.IsFullbrightMask != true).ToArray();
+            var mainSourceFile = normalSourceFiles.FirstOrDefault(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
+            if (mainSourceFile is null)
             {
-                logger.Log($"- WARNING: missing main file for '{textureName}' ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
+                logger.Log($"- WARNING: missing main file for '{textureName}' ({string.Join(", ", normalSourceFiles.Select(file => file.Path))}). Skipping file(s).");
                 return false;
             }
 
             // Do we have conflicting input files (e.g. "foo.png" and "foo.jpg", or multiple images for the same mipmap level)?
-            if (textureSourceFiles.Length > 1)
+            if (normalSourceFiles.Length > 1)
             {
-                var hasDuplicateMipmaps = textureSourceFiles
+                var hasDuplicateMipmaps = normalSourceFiles
                     .GroupBy(file => file.Settings.MipmapLevel ?? MipmapLevel.Main)
                     .Any(mipmapGroup => mipmapGroup.Count() > 1);
                 if (hasDuplicateMipmaps)
                 {
-                    logger.Log($"- WARNING: conflicting input files detected for '{textureName}' ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping files.");
+                    logger.Log($"- WARNING: conflicting input files detected for '{textureName}' ({string.Join(", ", normalSourceFiles.Select(file => file.Path))}). Skipping files.");
                     return false;
+                }
+            }
+
+            // Check (optional) fullbright mask images:
+            if (TextureName.IsFullbright(textureName) && mainSourceFile.Settings.NoFullbright != true)
+            {
+                var fullbrightSourceFiles = textureSourceFiles.Where(file => file.Settings.IsFullbrightMask == true).ToArray();
+                if (fullbrightSourceFiles.Any())
+                {
+                    // Is the main mask image missing?
+                    if (!fullbrightSourceFiles.Any(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main))
+                    {
+                        logger.Log($"- WARNING: missing main fullbright mask file for '{textureName}' ({string.Join(", ", fullbrightSourceFiles.Select(file => file.Path))}). Skipping file(s).");
+                        return false;
+                    }
+
+                    // Do we have duplicate fullbright mipmaps?
+                    if (fullbrightSourceFiles.Length > 1)
+                    {
+                        var hasDuplicateFullbrightMipmaps = fullbrightSourceFiles
+                            .GroupBy(file => file.Settings.MipmapLevel ?? MipmapLevel.Main)
+                            .Any(mipmapGroup => mipmapGroup.Count() > 1);
+                        if (hasDuplicateFullbrightMipmaps)
+                        {
+                            logger.Log($"- WARNING: conflicting input files detected for '{textureName}' ({string.Join(", ", fullbrightSourceFiles.Select(file => file.Path))}). Skipping files.");
+                            return false;
+                        }
+                    }
                 }
             }
 
@@ -301,7 +331,7 @@ namespace WadMaker
             }
 
             // Then build the texture:
-            var mainFileSettings = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main).Settings;
+            var mainFileSettings = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true).Settings;
             switch (mainFileSettings.TextureType)
             {
                 default:
@@ -313,13 +343,14 @@ namespace WadMaker
 
         private static Texture CreateMipmapTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, bool isDecalsWad, Logger logger)
         {
-            var mainSourceFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
+            var normalSourceFiles = sourceFiles.Where(file => file.Settings.IsFullbrightMask != true).ToArray();
+            var mainSourceFile = normalSourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
 
             // Load the main image, and any mipmap images:
             using (var mainImage = ImageReading.ReadImage(mainSourceFile.Path))
             using (var mipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
             {
-                foreach (var sourceFile in sourceFiles)
+                foreach (var sourceFile in normalSourceFiles)
                 {
                     var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
                     if (mipmapLevel > 0)
@@ -341,13 +372,55 @@ namespace WadMaker
 
                 // Create the texture:
                 if (isDecalsWad)
+                {
                     return CreateDecalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+                }
                 else if (TextureName.IsTransparent(textureName))
+                {
                     return CreateTransparentTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+                }
                 else if (TextureName.IsWater(textureName))
+                {
                     return CreateWaterTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+                }
+                else if (TextureName.IsFullbright(textureName) && mainSourceFile.Settings.NoFullbright != true)
+                {
+                    var fullbrightSourceFiles = sourceFiles.Where(file => file.Settings.IsFullbrightMask == true).ToArray();
+                    var mainFullbrightFile = fullbrightSourceFiles.SingleOrDefault(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
+
+                    // If any fullbright mask files are present, load them:
+                    using (var mainFullbrightImage = mainFullbrightFile is not null ? ImageReading.ReadImage(mainFullbrightFile.Path) : null)
+                    using (var fullbrightMipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
+                    {
+                        foreach (var sourceFile in fullbrightSourceFiles)
+                        {
+                            var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
+                            if (mipmapLevel > 0)
+                                fullbrightMipmapImages[mipmapLevel - 1] = ImageReading.ReadImage(sourceFile.Path);
+                        }
+
+                        if (mainFullbrightImage is not null)
+                        {
+                            // Verify fullbright mask image size:
+                            if (mainFullbrightImage.Width != mainImage.Width || mainFullbrightImage.Height != mainImage.Height)
+                                throw new InvalidDataException($"Fullbright mask for '{textureName}' is {mainFullbrightImage.Width}x{mainFullbrightImage.Height}, which does not match the main texture image: {mainImage.Width}x{mainImage.Height}.");
+
+                            // Verify fullbright mipmap sizes:
+                            for (int i = 1; i < fullbrightMipmapImages.Count; i++)
+                            {
+                                var fullbrightMipmapImage = fullbrightMipmapImages[i - 1];
+                                if (fullbrightMipmapImage is not null && (fullbrightMipmapImage.Width != mainImage.Width >> i || fullbrightMipmapImage.Height != mainImage.Height >> i))
+                                    throw new InvalidDataException($"Fullbright mipmap {i} for texture '{textureName}' is {fullbrightMipmapImage.Width}x{fullbrightMipmapImage.Height} but should be {mainImage.Width >> i}x{mainImage.Height >> i}.");
+                            }
+                        }
+
+                        return CreateFullbrightTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, mainFullbrightImage, fullbrightMipmapImages, logger);
+                    }
+                }
                 else
+                {
                     return CreateNormalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+                }
             }
         }
 
@@ -559,13 +632,121 @@ namespace WadMaker
                 mipmap3Data: mipmapTextureData[2]);
         }
 
+        private static Texture CreateFullbrightTexture(
+            string textureName,
+            TextureSettings textureSettings,
+            Image<Rgba32> mainImage,
+            IReadOnlyList<Image<Rgba32>?> mipmapImages,
+            Image<Rgba32>? fullbrightMaskImage,
+            IReadOnlyList<Image<Rgba32>?> fullbrightMipmapImages,
+            Logger logger)
+        {
+            // With fullbright textures, the last 32 colors are used for full-bright pixels:
+            var maxFullbrightColors = 32;
+            var maxNormalColors = 256 - maxFullbrightColors;
+            var fullbrightAlphaThreshold = textureSettings.FullbrightAlphaThreshold ?? 128;
+
+            var normalImages = new[] { mainImage }.Concat(mipmapImages).ToArray();
+            var fullbrightImages = new[] { fullbrightMaskImage }.Concat(fullbrightMipmapImages).ToArray();
+
+            var normalColorHistogram = new Dictionary<Rgba32, int>();
+            var fullbrightColorHistogram = new Dictionary<Rgba32, int>();
+            for (int i = 0; i < normalImages.Length; i++)
+            {
+                var normalImage = normalImages[i];
+                var fullbrightImage = fullbrightImages[i];
+
+                if (normalImage is not null)
+                {
+                    if (fullbrightImage is not null)
+                        ColorQuantization.UpdateColorHistogram(normalColorHistogram, normalImage.Frames[0], (x, y, color) => fullbrightImage[x, y].A >= fullbrightAlphaThreshold);
+                    else
+                        ColorQuantization.UpdateColorHistogram(normalColorHistogram, normalImage.Frames[0], color => false);
+                }
+
+                if (fullbrightImage is not null)
+                    ColorQuantization.UpdateColorHistogram(fullbrightColorHistogram, fullbrightImage.Frames[0], color => color.A < fullbrightAlphaThreshold);
+            }
+
+            // Create a color index lookup cache for normal pixels:
+            var normalColorClusters = ColorQuantization.GetColorClusters(normalColorHistogram, maxNormalColors);
+            var normalColorIndexMappingCache = new Dictionary<Rgba32, int>();
+            for (int i = 0; i < normalColorClusters.Length; i++)
+            {
+                (_, var colors) = normalColorClusters[i];
+                foreach (var color in colors)
+                    normalColorIndexMappingCache[color] = i;
+            }
+
+            // And a separate color index lookup cache for fullbright pixels:
+            var fullbrightColorClusters = ColorQuantization.GetColorClusters(fullbrightColorHistogram, maxFullbrightColors);
+            var fullbrightColorIndexMappingCache = new Dictionary<Rgba32, int>();
+            for (int i = 0; i < fullbrightColorClusters.Length; i++)
+            {
+                (_, var colors) = fullbrightColorClusters[i];
+                foreach (var color in colors)
+                    fullbrightColorIndexMappingCache[color] = i;
+            }
+
+            // Create the palette, and make sure we end up with a 256-color palette (some tools can't handle smaller palettes):
+            var palette = normalColorClusters.Select(cluster => cluster.averageColor)
+                .Concat(Enumerable.Repeat(new Rgba32(), maxNormalColors - normalColorClusters.Length))
+                .Concat(fullbrightColorClusters.Select(cluster => cluster.averageColor))
+                .Concat(Enumerable.Repeat(new Rgba32(), maxFullbrightColors - fullbrightColorClusters.Length))
+                .ToArray();
+
+            // Create any missing mipmaps (fullbright mipmaps only need to be created if there is a fullbright mask image):
+            var normalMipmaps = mipmapImages
+                .Select((image, i) => image ?? mainImage.Clone(context => context.Resize(mainImage.Width >> (i + 1), mainImage.Height >> (i + 1))))
+                .ToArray();
+            var fullbrightMipmaps = fullbrightMipmapImages
+                .Select((image, i) => image ?? fullbrightMaskImage?.Clone(context => context.Resize(mainImage.Width >> (i + 1), mainImage.Height >> (i + 1))))
+                .ToArray();
+
+            // Create texture data:
+            var isAnimatedTexture = TextureName.IsAnimated(textureName);
+            var mainTextureData = CreateFullbrightTextureData(
+                mainImage,
+                fullbrightMaskImage,
+                palette,
+                normalColorIndexMappingCache,
+                fullbrightColorIndexMappingCache,
+                textureSettings,
+                maxNormalColors,
+                fullbrightAlphaThreshold,
+                disableDithering: isAnimatedTexture);
+
+            var mipmapTextureData = normalMipmaps
+                .Select((image, i) => CreateFullbrightTextureData(
+                    image,
+                    fullbrightMipmaps[i],
+                    palette,
+                    normalColorIndexMappingCache,
+                    fullbrightColorIndexMappingCache,
+                    textureSettings,
+                    maxNormalColors,
+                    fullbrightAlphaThreshold,
+                    disableDithering: isAnimatedTexture))
+                .ToArray();
+
+            return Texture.CreateMipmapTexture(
+                name: textureName,
+                width: mainImage.Width,
+                height: mainImage.Height,
+                imageData: mainTextureData,
+                palette: palette,
+                mipmap1Data: mipmapTextureData[0],
+                mipmap2Data: mipmapTextureData[1],
+                mipmap3Data: mipmapTextureData[2]);
+        }
+
         private static Texture CreateSimpleTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, Logger logger)
         {
             if (sourceFiles.Length > 1)
                 logger.Log($"- WARNING: Skipping mipmap files for simple texture (qpic) '{textureName}'.");
 
 
-            var mainFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
+            var mainFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true);
             using (var image = ImageReading.ReadImage(mainFile.Path))
             {
                 var colorHistogram = ColorQuantization.GetColorHistogram(new[] { image }, color => false);
@@ -627,6 +808,70 @@ namespace WadMaker
                 case DitheringAlgorithm.FloydSteinberg:
                     return Dithering.FloydSteinberg(image, palette, getColorIndex, textureSettings.DitherScale ?? 0.75f, isTransparent);
             }
+        }
+
+        private static byte[] CreateFullbrightTextureData(
+            Image<Rgba32> image,
+            Image<Rgba32>? fullbrightImage,
+            Rgba32[] palette,
+            IDictionary<Rgba32, int> normalColorIndexMappingCache,
+            IDictionary<Rgba32, int> fullbrightColorIndexMappingCache,
+            TextureSettings textureSettings,
+            int maxNormalColors,
+            int fullbrightAlphaThreshold,
+            bool disableDithering)
+        {
+            var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (disableDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
+
+            // First create texture data for normal pixels:
+            var normalPalette = palette.Take(maxNormalColors).ToArray();
+            var getNormalColorIndex = ColorQuantization.CreateColorIndexLookup(normalPalette, normalColorIndexMappingCache, color => false);
+            byte[] textureData;
+            switch (ditheringAlgorithm)
+            {
+                default:
+                case DitheringAlgorithm.None:
+                    textureData = Dithering.None(image, getNormalColorIndex);
+                    break;
+
+                case DitheringAlgorithm.FloydSteinberg:
+                    textureData = Dithering.FloydSteinberg(image, normalPalette, getNormalColorIndex, textureSettings.DitherScale ?? 0.75f);
+                    break;
+            }
+
+            if (fullbrightImage is not null)
+            {
+                // If a fullbright mask is provided, create texture data for fullbright pixels:
+                var fullbrightPalette = palette.Skip(maxNormalColors).ToArray();
+                var getFullbrightColorIndex = ColorQuantization.CreateColorIndexLookup(fullbrightPalette, fullbrightColorIndexMappingCache, color => color.A < fullbrightAlphaThreshold);
+
+                byte[] fullbrightTextureData;
+                switch (ditheringAlgorithm)
+                {
+                    default:
+                    case DitheringAlgorithm.None:
+                        fullbrightTextureData = Dithering.None(fullbrightImage, getFullbrightColorIndex);
+                        break;
+
+                    case DitheringAlgorithm.FloydSteinberg:
+                        fullbrightTextureData = Dithering.FloydSteinberg(fullbrightImage, fullbrightPalette, getFullbrightColorIndex, textureSettings.DitherScale ?? 0.75f, color => color.A < fullbrightAlphaThreshold);
+                        break;
+                }
+
+                // Merge the fullbright pixel data into the normal texture data:
+                for (int y = 0; y < image.Height; y++)
+                {
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        if (fullbrightImage[x, y].A >= fullbrightAlphaThreshold)
+                        {
+                            textureData[y * image.Width + x] = (byte)(maxNormalColors + fullbrightTextureData[y * image.Width + x]);
+                        }
+                    }
+                }
+            }
+
+            return textureData;
         }
 
 

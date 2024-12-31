@@ -163,6 +163,9 @@ namespace WadMaker.Settings
             if (settings.Ignore != null) writer.WriteBoolean("ignore", settings.Ignore.Value);
             if (settings.TextureType != null) writer.WriteString("texture-type", Serialization.ToString(settings.TextureType.Value));
             if (settings.MipmapLevel != null) writer.WriteString("mipmap-level", Serialization.ToString(settings.MipmapLevel.Value));
+            if (settings.IsFullbrightMask != null) writer.WriteBoolean("is-fullbright-mask", settings.IsFullbrightMask.Value);
+            if (settings.NoFullbright != null) writer.WriteBoolean("no-fullbright", settings.NoFullbright.Value);
+            if (settings.FullbrightAlphaThreshold != null) writer.WriteNumber("fullbright-alpha-threshold", settings.FullbrightAlphaThreshold.Value);
             if (settings.DitheringAlgorithm != null) writer.WriteString("dithering-algorithm", Serialization.ToString(settings.DitheringAlgorithm.Value));
             if (settings.DitherScale != null) writer.WriteNumber("dither-scale", settings.DitherScale.Value);
             if (settings.TransparencyThreshold != null) writer.WriteNumber("transparency-threshold", settings.TransparencyThreshold.Value);
@@ -189,6 +192,9 @@ namespace WadMaker.Settings
                     case "ignore": settings.Ignore = reader.ReadBoolean(); break;
                     case "texture-type": settings.TextureType = Serialization.ReadTextureType(reader.ReadString()); break;
                     case "mipmap-level": settings.MipmapLevel = Serialization.ReadMipmapLevel(reader.ReadString()); break;
+                    case "is-fullbright-mask": settings.IsFullbrightMask = reader.ReadBoolean(); break;
+                    case "no-fullbright": settings.NoFullbright = reader.ReadBoolean(); break;
+                    case "fullbright-alpha-threshold": settings.FullbrightAlphaThreshold = (int)reader.ReadInt64(); break;
                     case "dithering-algorithm": settings.DitheringAlgorithm = Serialization.ReadDitheringAlgorithm(reader.ReadString()); break;
                     case "dither-scale": settings.DitherScale = reader.ReadFloat(); break;
                     case "transparency-threshold": settings.TransparencyThreshold = (int)reader.ReadInt64(); break;
