@@ -3,12 +3,25 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
 using System.Diagnostics;
 using WadMaker.Settings;
+using Shared.FileFormats;
+using Shared.FileFormats.Indexed;
 
 namespace WadMaker
 {
+    public class ExtractionSettings
+    {
+        public bool ExtractMipmaps { get; set; }
+        public bool NoFullbrightMasks { get; set; }
+        public bool OverwriteExistingFiles { get; set; }
+
+        public ImageFormat OutputFormat { get; set; }
+        public bool SaveAsIndexed { get; set; }
+    }
+
+
     public static class TextureExtracting
     {
-        public static void ExtractTextures(string inputFilePath, string outputDirectory, bool extractMipmaps, bool noFullbrightMasks, bool overwriteExistingFiles, Logger logger)
+        public static void ExtractTextures(string inputFilePath, string outputDirectory, ExtractionSettings settings, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -36,43 +49,56 @@ namespace WadMaker
             {
                 var isFullbrightTexture = !isDecalsWad && TextureName.IsFullbright(texture.Name);
 
-                var maxMipmap = (texture.Type == TextureType.MipmapTexture && extractMipmaps) ? 4 : 1;
+                var maxMipmap = (texture.Type == TextureType.MipmapTexture && settings.ExtractMipmaps) ? 4 : 1;
                 for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
                 {
                     try
                     {
-                        var baseFilePath = Path.Combine(outputDirectory, texture.Name + ".png");
+                        var baseFilePath = Path.Combine(outputDirectory, texture.Name + "." + ImageFileIO.GetDefaultExtension(settings.OutputFormat));
 
                         var fileSettings = GetOutputFileTextureSettings(texture, mipmap);
                         var filePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
 
-                        if (!overwriteExistingFiles && File.Exists(filePath))
+                        if (!settings.OverwriteExistingFiles && File.Exists(filePath))
                         {
                             logger.Log($"- WARNING: '{filePath}' already exist. Skipping texture.");
                             continue;
                         }
 
-                        using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
+                        if (settings.SaveAsIndexed)
                         {
-                            if (image != null)
+                            var textureData = texture.GetImageData(mipmap);
+                            if (textureData is not null)
                             {
-                                image.SaveAsPng(filePath);
+                                var indexedImage = new IndexedImage(textureData, texture.Width >> mipmap, texture.Height >> mipmap, texture.Palette);
+                                ImageFileIO.SaveIndexedImage(indexedImage, filePath, settings.OutputFormat);
                                 imageFilesCreated += 1;
                             }
                         }
-
-                        // Create fullbright mask images for textures/mipmaps that contain fullbright pixels:
-                        if (isFullbrightTexture && !noFullbrightMasks && texture.GetImageData(mipmap)?.Any(index => index >= 224) == true)
+                        else
                         {
-                            using (var image = TextureToFullbrightMaskImage(texture, mipmap))
+                            using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
                             {
                                 if (image != null)
                                 {
-                                    fileSettings.IsFullbrightMask = true;
-                                    var fullbrightFilePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
-
-                                    image.SaveAsPng(fullbrightFilePath);
+                                    ImageFileIO.SaveImage(image, filePath, settings.OutputFormat);
                                     imageFilesCreated += 1;
+                                }
+                            }
+
+                            // Create fullbright mask images for textures/mipmaps that contain fullbright pixels:
+                            if (isFullbrightTexture && !settings.NoFullbrightMasks && texture.GetImageData(mipmap)?.Any(index => index >= 224) == true)
+                            {
+                                using (var image = TextureToFullbrightMaskImage(texture, mipmap))
+                                {
+                                    if (image != null)
+                                    {
+                                        fileSettings.IsFullbrightMask = true;
+                                        var fullbrightFilePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
+
+                                        ImageFileIO.SaveImage(image, fullbrightFilePath, settings.OutputFormat);
+                                        imageFilesCreated += 1;
+                                    }
                                 }
                             }
                         }
@@ -105,7 +131,7 @@ namespace WadMaker
         }
 
 
-        static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
+        private static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
         {
             var imageData = texture.GetImageData(mipmap);
             if (imageData == null)
@@ -132,7 +158,7 @@ namespace WadMaker
             return image;
         }
 
-        static Image<Rgba32>? TextureToImage(Texture texture, int mipmap = 0)
+        private static Image<Rgba32>? TextureToImage(Texture texture, int mipmap = 0)
         {
             var imageData = texture.GetImageData(mipmap);
             if (imageData == null)
@@ -166,7 +192,7 @@ namespace WadMaker
             return image;
         }
 
-        static Image<Rgba32>? TextureToFullbrightMaskImage(Texture texture, int mipmap = 0)
+        private static Image<Rgba32>? TextureToFullbrightMaskImage(Texture texture, int mipmap = 0)
         {
             var imageData = texture.GetImageData(mipmap);
             if (imageData == null)
@@ -199,7 +225,7 @@ namespace WadMaker
             return image;
         }
 
-        static TextureSettings GetOutputFileTextureSettings(Texture texture, int mipmap)
+        private static TextureSettings GetOutputFileTextureSettings(Texture texture, int mipmap)
         {
             if (mipmap > 0)
                 return new TextureSettings { MipmapLevel = (MipmapLevel)mipmap };
@@ -217,7 +243,7 @@ namespace WadMaker
         }
 
 
-        static void CreateDirectory(string? path)
+        private static void CreateDirectory(string? path)
         {
             if (!string.IsNullOrEmpty(path))
                 Directory.CreateDirectory(path);

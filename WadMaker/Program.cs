@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using Shared;
 using System.Diagnostics.CodeAnalysis;
+using Shared.FileFormats;
 
 namespace WadMaker
 {
@@ -19,6 +20,8 @@ namespace WadMaker
         public bool ExtractMipmaps { get; set; }            // -mipmaps         Also extract mipmaps
         public bool NoFullbrightMasks { get; set; }         // -nofullbright    Do not extract fullbright masks
         public bool OverwriteExistingFiles { get; set; }    // -overwrite       Extract mode only, enables overwriting of existing image files (off by default)
+        public ImageFormat OutputImageFormat { get; set; }  // -format          Extracted images output format (png, jpg, gif, bmp or tga).
+        public bool ExtractAsIndexed { get; set; }          // -indexed         Extracted images are indexed and contain the original texture's palette. Only works with png, gif and bmp.
 
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
@@ -69,7 +72,14 @@ namespace WadMaker
                 var logger = new Logger(Log);
                 if (settings.Extract)
                 {
-                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, settings.ExtractMipmaps, settings.NoFullbrightMasks, settings.OverwriteExistingFiles, logger);
+                    var extractionSettings = new ExtractionSettings {
+                        ExtractMipmaps = settings.ExtractMipmaps,
+                        NoFullbrightMasks = settings.NoFullbrightMasks,
+                        OverwriteExistingFiles = settings.OverwriteExistingFiles,
+                        OutputFormat = settings.OutputImageFormat,
+                        SaveAsIndexed = settings.ExtractAsIndexed,
+                    };
+                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, extractionSettings, logger);
                 }
                 else if (settings.ExtractToWad)
                 {
@@ -104,7 +114,7 @@ namespace WadMaker
         }
 
 
-        static ProgramSettings ParseArguments(string[] args)
+        private static ProgramSettings ParseArguments(string[] args)
         {
             var settings = new ProgramSettings();
 
@@ -120,8 +130,18 @@ namespace WadMaker
                     case "-mipmaps": settings.ExtractMipmaps = true; break;
                     case "-nofullbright": settings.NoFullbrightMasks = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
+
+                    case "-format":
+                        if (index >= args.Length)
+                            throw new InvalidUsageException("The -format parameter must be set to either png, jpg, gif, bmp or tga.");
+
+                        settings.OutputImageFormat = ParseOutputImageFormat(args[index++]);
+                        break;
+
+                    case "-indexed": settings.ExtractAsIndexed = true; break;
                     case "-remove": settings.RemoveEmbeddedTextures = true; break;
                     case "-nologfile": settings.DisableFileLogging = true; break;
+
                     default: throw new InvalidUsageException($"Unknown argument: '{arg}'.");
                 }
             }
@@ -205,8 +225,22 @@ namespace WadMaker
             return settings;
         }
 
+        private static ImageFormat ParseOutputImageFormat(string str)
+        {
+            switch (str.ToLowerInvariant())
+            {
+                case "png": return ImageFormat.Png;
+                case "jpg": return ImageFormat.Jpg;
+                case "gif": return ImageFormat.Gif;
+                case "bmp": return ImageFormat.Bmp;
+                case "tga": return ImageFormat.Tga;
 
-        static void Log(string? message)
+                default: throw new InvalidDataException($"Unknown image format: {str}.");
+            }
+        }
+
+
+        private static void Log(string? message)
         {
             Console.WriteLine(message);
             LogFile?.WriteLine(message);
