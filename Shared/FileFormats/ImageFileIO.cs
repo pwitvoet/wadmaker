@@ -3,12 +3,12 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace Shared.FileFormats
 {
-    public static class ImageReading
+    public static class ImageFileIO
     {
         private static IImageReader[] _imageReaders;
         private static IDictionary<string, IImageReader> _extensionReaderMapping;
 
-        static ImageReading()
+        static ImageFileIO()
         {
             _imageReaders = new IImageReader[] {
                 new ImageReader(),
@@ -23,12 +23,16 @@ namespace Shared.FileFormats
         }
 
 
-        public static bool IsSupported(string path)
-        {
-            return _extensionReaderMapping.ContainsKey(GetExtension(path));
-        }
+        /// <summary>
+        /// Returns true if the given file type (based on extension) is supported.
+        /// </summary>
+        public static bool CanLoad(string path) => _extensionReaderMapping.ContainsKey(GetExtension(path));
 
-        public static Image<Rgba32> ReadImage(string path)
+        /// <summary>
+        /// Loads the given image file.
+        /// This method will throw an exception if the file format is not supported, or if loading fails for some other reason.
+        /// </summary>
+        public static Image<Rgba32> LoadImage(string path)
         {
             if (!_extensionReaderMapping.TryGetValue(GetExtension(path), out var reader))
                 throw new NotSupportedException($"File format '{GetExtension(path)}' is not supported.");

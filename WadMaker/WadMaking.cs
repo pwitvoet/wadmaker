@@ -44,7 +44,7 @@ namespace WadMaker
             // Gather input files:
             var textureSourceFileGroups = GetInputFilePaths(inputDirectory, includeSubDirectories)
                 .Select(wadMakingSettings.GetTextureSourceFileInfo)
-                .Where(file => file.Settings.Ignore != true && (ImageReading.IsSupported(file.Path) || !string.IsNullOrEmpty(file.Settings.Converter)))
+                .Where(file => file.Settings.Ignore != true && (ImageFileIO.CanLoad(file.Path) || !string.IsNullOrEmpty(file.Settings.Converter)))
                 .GroupBy(file => WadMakingSettings.GetTextureName(file.Path))
                 .ToArray();
 
@@ -320,7 +320,7 @@ namespace WadMaker
                     if (outputFilePaths.Length < 1)
                         throw new IOException("Unable to find converter output file. An output file must have the same name as the input file (different extensions are ok).");
 
-                    var supportedOutputFilePaths = outputFilePaths.Where(ImageReading.IsSupported).ToArray();
+                    var supportedOutputFilePaths = outputFilePaths.Where(ImageFileIO.CanLoad).ToArray();
                     if (supportedOutputFilePaths.Length < 1)
                         throw new IOException("The converter did not produce a supported file type.");
                     else if (supportedOutputFilePaths.Length > 1)
@@ -347,14 +347,14 @@ namespace WadMaker
             var mainSourceFile = normalSourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
 
             // Load the main image, and any mipmap images:
-            using (var mainImage = ImageReading.ReadImage(mainSourceFile.Path))
+            using (var mainImage = ImageFileIO.LoadImage(mainSourceFile.Path))
             using (var mipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
             {
                 foreach (var sourceFile in normalSourceFiles)
                 {
                     var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
                     if (mipmapLevel > 0)
-                        mipmapImages[mipmapLevel - 1] = ImageReading.ReadImage(sourceFile.Path);
+                        mipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
                 }
 
                 // Verify main image size:
@@ -389,14 +389,14 @@ namespace WadMaker
                     var mainFullbrightFile = fullbrightSourceFiles.SingleOrDefault(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
 
                     // If any fullbright mask files are present, load them:
-                    using (var mainFullbrightImage = mainFullbrightFile is not null ? ImageReading.ReadImage(mainFullbrightFile.Path) : null)
+                    using (var mainFullbrightImage = mainFullbrightFile is not null ? ImageFileIO.LoadImage(mainFullbrightFile.Path) : null)
                     using (var fullbrightMipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
                     {
                         foreach (var sourceFile in fullbrightSourceFiles)
                         {
                             var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
                             if (mipmapLevel > 0)
-                                fullbrightMipmapImages[mipmapLevel - 1] = ImageReading.ReadImage(sourceFile.Path);
+                                fullbrightMipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
                         }
 
                         if (mainFullbrightImage is not null)
@@ -747,7 +747,7 @@ namespace WadMaker
 
 
             var mainFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true);
-            using (var image = ImageReading.ReadImage(mainFile.Path))
+            using (var image = ImageFileIO.LoadImage(mainFile.Path))
             {
                 var colorHistogram = ColorQuantization.GetColorHistogram(new[] { image }, color => false);
                 var maxColors = 256;

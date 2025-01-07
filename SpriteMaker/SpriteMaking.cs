@@ -38,7 +38,7 @@ namespace SpriteMaker
                 .Where(path =>
                 {
                     var settings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings;
-                    return settings.Ignore != true && (ImageReading.IsSupported(path) || settings.Converter != null);
+                    return settings.Ignore != true && (ImageFileIO.CanLoad(path) || settings.Converter != null);
                 })
                 .ToArray();
 
@@ -90,7 +90,7 @@ namespace SpriteMaker
                 .Where(path =>
                 {
                     var settings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings;
-                    return settings.Ignore != true && (ImageReading.IsSupported(path) || settings.Converter != null);
+                    return settings.Ignore != true && (ImageFileIO.CanLoad(path) || settings.Converter != null);
                 })
                 .GroupBy(path => SpriteMakingSettings.GetSpriteName(path));
 
@@ -232,7 +232,7 @@ namespace SpriteMaker
                 var imagePathsAndSettings = imagePaths
                     .Select(path =>
                     {
-                        var isSupportedFileType = ImageReading.IsSupported(path);
+                        var isSupportedFileType = ImageFileIO.CanLoad(path);
                         var filenameSettings = SpriteFilenameSettings.FromFilename(path);
                         var spriteSettings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path));
 
@@ -305,7 +305,7 @@ namespace SpriteMaker
                             if (outputFilePaths.Length < 1)
                                 throw new IOException("Unable to find converter output files. Output files must have the same name as the input file (different extensions and suffixes are ok).");
 
-                            imageFilePaths = outputFilePaths.Where(ImageReading.IsSupported).ToArray();
+                            imageFilePaths = outputFilePaths.Where(ImageFileIO.CanLoad).ToArray();
                             if (imageFilePaths.Length < 1)
                                 throw new IOException("The converter did not produce any supported file types.");
                         }
@@ -313,7 +313,7 @@ namespace SpriteMaker
                         // Load images (and cut up spritesheets into separate frame images):
                         foreach (var imageFilePath in imageFilePaths)
                         {
-                            var image = ImageReading.ReadImage(imageFilePath);
+                            var image = ImageFileIO.LoadImage(imageFilePath);
                             if (file.filenameSettings.SpritesheetTileSize is Size tileSize)
                             {
                                 if (tileSize.Width < 1 || tileSize.Height < 1)
