@@ -47,6 +47,7 @@ namespace Shared.FileFormats
             }
         }
 
+
         /// <summary>
         /// Returns true if the given file type (based on extension) is supported.
         /// </summary>
@@ -63,6 +64,11 @@ namespace Shared.FileFormats
 
             return reader.ReadImage(path);
         }
+
+        public static bool IsIndexed(string path) => IndexedImageReader.IsIndexed(path);
+
+        public static IndexedImage LoadIndexedImage(string path) => IndexedImageReader.LoadIndexedImage(path);
+
 
         /// <summary>
         /// Saves the given image in the specified format.

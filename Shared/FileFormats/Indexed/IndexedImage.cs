@@ -8,23 +8,25 @@ namespace Shared.FileFormats.Indexed
         public int Height { get; }
         public ReadOnlyMemory<Rgba32> Palette { get; }
 
-        private byte[] ImageData { get; }
+        public List<IndexedImageFrame> Frames { get; } = new();
 
 
-        public IndexedImage(byte[] imageData, int width, int height, Rgba32[] palette)
+        public IndexedImage(int width, int height, Rgba32[] palette)
         {
-            if (imageData.Length != width * height)
-                throw new ArgumentException($"Image data must be {width} * {height}.");
-
-            ImageData = imageData;
             Width = width;
             Height = height;
             Palette = palette;
         }
 
-        public byte this[int x, int y]
+        public IndexedImage(byte[] imageData, int width, int height, Rgba32[] palette)
+            : this(width, height, palette)
         {
-            get => ImageData[y * Width + x];
+            if (imageData.Length != width * height)
+                throw new ArgumentException($"Image data must be {width} * {height}.");
+
+            Frames.Add(new IndexedImageFrame(imageData, width, height));
         }
+
+        public byte this[int x, int y] => Frames[0][x, y];
     }
 }

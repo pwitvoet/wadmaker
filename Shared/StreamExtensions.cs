@@ -37,6 +37,14 @@ namespace Shared
         }
 
 
+        public static int ReadIntBigEndian(this Stream stream)
+        {
+            var data = stream.ReadBytes(4);
+            Array.Reverse(data);
+            return BitConverter.ToInt32(data, 0);
+        }
+
+
         public static Rgba32 ReadColor(this Stream stream)
         {
             var data = stream.ReadBytes(3);
