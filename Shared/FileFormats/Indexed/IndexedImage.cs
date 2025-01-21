@@ -6,7 +6,9 @@ namespace Shared.FileFormats.Indexed
     {
         public int Width { get; }
         public int Height { get; }
-        public ReadOnlyMemory<Rgba32> Palette { get; }
+        public Rgba32[] Palette { get; }
+
+        public byte[] ImageData => Frames[0].ImageData;
 
         public List<IndexedImageFrame> Frames { get; } = new();
 
@@ -27,6 +29,10 @@ namespace Shared.FileFormats.Indexed
             Frames.Add(new IndexedImageFrame(imageData, width, height));
         }
 
-        public byte this[int x, int y] => Frames[0][x, y];
+        public byte this[int x, int y]
+        {
+            get => Frames[0][x, y];
+            set => Frames[0][x, y] = value;
+        }
     }
 }

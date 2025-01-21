@@ -5,7 +5,7 @@
         public int Width { get; }
         public int Height { get; }
 
-        private byte[] ImageData { get; }
+        public byte[] ImageData { get; }
 
 
         public IndexedImageFrame(byte[] imageData, int width, int height)
@@ -18,6 +18,10 @@
             Height = height;
         }
 
-        public byte this[int x, int y] => ImageData[y * Width + x];
+        public byte this[int x, int y]
+        {
+            get => ImageData[y * Width + x];
+            set => ImageData[y * Width + x] = value;
+        }
     }
 }
