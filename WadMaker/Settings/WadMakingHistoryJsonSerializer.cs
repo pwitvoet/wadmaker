@@ -166,6 +166,7 @@ namespace WadMaker.Settings
             if (settings.IsFullbrightMask != null) writer.WriteBoolean("is-fullbright-mask", settings.IsFullbrightMask.Value);
             if (settings.NoFullbright != null) writer.WriteBoolean("no-fullbright", settings.NoFullbright.Value);
             if (settings.FullbrightAlphaThreshold != null) writer.WriteNumber("fullbright-alpha-threshold", settings.FullbrightAlphaThreshold.Value);
+            if (settings.PreservePalette != null) writer.WriteBoolean("preserve-palette", settings.PreservePalette.Value);
             if (settings.DitheringAlgorithm != null) writer.WriteString("dithering-algorithm", Serialization.ToString(settings.DitheringAlgorithm.Value));
             if (settings.DitherScale != null) writer.WriteNumber("dither-scale", settings.DitherScale.Value);
             if (settings.TransparencyThreshold != null) writer.WriteNumber("transparency-threshold", settings.TransparencyThreshold.Value);
@@ -195,6 +196,7 @@ namespace WadMaker.Settings
                     case "is-fullbright-mask": settings.IsFullbrightMask = reader.ReadBoolean(); break;
                     case "no-fullbright": settings.NoFullbright = reader.ReadBoolean(); break;
                     case "fullbright-alpha-threshold": settings.FullbrightAlphaThreshold = (int)reader.ReadInt64(); break;
+                    case "preserve-palette": settings.PreservePalette = reader.ReadBoolean(); break;
                     case "dithering-algorithm": settings.DitheringAlgorithm = Serialization.ReadDitheringAlgorithm(reader.ReadString()); break;
                     case "dither-scale": settings.DitherScale = reader.ReadFloat(); break;
                     case "transparency-threshold": settings.TransparencyThreshold = (int)reader.ReadInt64(); break;

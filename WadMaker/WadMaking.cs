@@ -7,6 +7,7 @@ using SixLabors.ImageSharp.Processing;
 using WadMaker.Settings;
 using Shared.FileSystem;
 using FileInfo = Shared.FileSystem.FileInfo;
+using Shared.FileFormats.Indexed;
 
 namespace WadMaker
 {
@@ -346,6 +347,11 @@ namespace WadMaker
             var normalSourceFiles = sourceFiles.Where(file => file.Settings.IsFullbrightMask != true).ToArray();
             var mainSourceFile = normalSourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
 
+            // Do we need to preserve the source image's palette?
+            if (mainSourceFile.Settings.PreservePalette == true && ImageFileIO.IsIndexed(mainSourceFile.Path))
+                return CreateMipmapTextureFromIndexedSourceFiles(textureName, normalSourceFiles, isDecalsWad, logger);
+
+
             // Load the main image, and any mipmap images:
             using (var mainImage = ImageFileIO.LoadImage(mainSourceFile.Path))
             using (var mipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
@@ -357,17 +363,7 @@ namespace WadMaker
                         mipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
                 }
 
-                // Verify main image size:
-                if (mainImage.Width % 16 != 0 || mainImage.Height % 16 != 0)
-                    throw new InvalidDataException($"Texture '{textureName}' is {mainImage.Width}x{mainImage.Height}. Both width and height must be a multiple of 16.");
-
-                // Verify mipmap sizes:
-                for (int i = 1; i < mipmapImages.Count; i++)
-                {
-                    var mipmapImage = mipmapImages[i - 1];
-                    if (mipmapImage is not null && (mipmapImage.Width != mainImage.Width >> i || mipmapImage.Height != mainImage.Height >> i))
-                        throw new InvalidDataException($"Mipmap {i} for texture '{textureName}' is {mipmapImage.Width}x{mipmapImage.Height} but should be {mainImage.Width >> i}x{mainImage.Height >> i}.");
-                }
+                VerifyMipmapTextureSizes(textureName, mainImage, mipmapImages);
 
 
                 // Create the texture:
@@ -422,6 +418,85 @@ namespace WadMaker
                     return CreateNormalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
                 }
             }
+        }
+
+        private static Texture CreateMipmapTextureFromIndexedSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, bool isDecalsWad, Logger logger)
+        {
+            var mainSourceFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
+            var indexedMainImage = ImageFileIO.LoadIndexedImage(mainSourceFile.Path);
+            var palette = indexedMainImage.Palette.Concat(Enumerable.Range(0, 256 - indexedMainImage.Palette.Length).Select(i => new Rgba32())).ToArray();
+
+            var indexedMipmapImages = new IndexedImage?[3];
+            foreach (var sourceFile in sourceFiles)
+            {
+                var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
+                if (mipmapLevel > 0)
+                {
+                    if (!ImageFileIO.IsIndexed(sourceFile.Path))
+                        throw new InvalidDataException($"Mipmap {mipmapLevel} for texture '{textureName}' is not in an indexed format.");
+
+                    var indexedImage = ImageFileIO.LoadIndexedImage(sourceFile.Path);
+                    if (!Enumerable.SequenceEqual(indexedImage.Palette, indexedMainImage.Palette))
+                        throw new InvalidDataException($"Mipmap {mipmapLevel} for texture '{textureName}' has a different palette.");
+
+                    indexedMipmapImages[mipmapLevel - 1] = indexedImage;
+                }
+            }
+
+            VerifyMipmapTextureSizes(textureName, indexedMainImage, indexedMipmapImages);
+
+            if (indexedMipmapImages.Any(image => image is null))
+            {
+                // Make palette adjustments for certain texture types, to ensure that mipmaps will be generated correctly:
+                var resizePalette = palette.ToArray();
+                if (isDecalsWad)
+                {
+                    var decalColor = resizePalette[255];
+                    resizePalette = Enumerable.Range(0, 256)
+                        .Select(i => new Rgba32(decalColor.R, decalColor.G, decalColor.B, (byte)i))
+                        .ToArray();
+                }
+                else if (TextureName.IsTransparent(textureName))
+                {
+                    resizePalette[255] = new Rgba32(0, 0, 0, 0);
+                }
+
+                // Create a true-color copy of the main image, for resizing:
+                var mainImage = new Image<Rgba32>(indexedMainImage.Width, indexedMainImage.Height);
+                for (int y = 0; y < indexedMainImage.Height; y++)
+                    for (int x = 0; x < indexedMainImage.Width; x++)
+                        mainImage[x, y] = resizePalette[indexedMainImage[x, y]];
+
+                var colorIndexMappingCache = new Dictionary<Rgba32, int>();
+                var isAnimatedTexture = TextureName.IsAnimated(textureName);
+                var transparencyThreshold = Math.Clamp(mainSourceFile.Settings.TransparencyThreshold ?? 128, 0, 255);
+                Func<Rgba32, bool> isTransparentPredicate = color => color.A < transparencyThreshold;
+
+                for (int i = 0; i < indexedMipmapImages.Length; i++)
+                {
+                    if (indexedMipmapImages[i] is not null)
+                        continue;
+
+                    var mipmapImage = mainImage.Clone(context => context.Resize(mainImage.Width >> (i + 1), mainImage.Height >> (i + 1)));
+                    var indexedMipmapData = isDecalsWad ? Dithering.None(mipmapImage, color => color.A) :
+                        CreateTextureData(mipmapImage, palette, colorIndexMappingCache, mainSourceFile.Settings, isTransparentPredicate, disableDithering: isAnimatedTexture);
+                    indexedMipmapImages[i] = new IndexedImage(indexedMipmapData, mipmapImage.Width, mipmapImage.Height, palette);
+                }
+            }
+
+            var mipmapTextureData = indexedMipmapImages
+                .Select(image => image!.ImageData)
+                .ToArray();
+
+            return Texture.CreateMipmapTexture(
+                name: textureName,
+                width: indexedMainImage.Width,
+                height: indexedMainImage.Height,
+                imageData: indexedMainImage.ImageData,
+                palette: palette,
+                mipmap1Data: mipmapTextureData[0],
+                mipmap2Data: mipmapTextureData[1],
+                mipmap3Data: mipmapTextureData[2]);
         }
 
         private static Texture CreateDecalTexture(string textureName, TextureSettings textureSettings, Image<Rgba32> mainImage, IReadOnlyList<Image<Rgba32>?> mipmapImages, Logger logger)
@@ -747,6 +822,22 @@ namespace WadMaker
 
 
             var mainFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true);
+
+            // Do we need to preserve the source image's palette?
+            if (mainFile.Settings.PreservePalette == true && ImageFileIO.IsIndexed(mainFile.Path))
+            {
+                var indexedImage = ImageFileIO.LoadIndexedImage(mainFile.Path);
+                var palette = indexedImage.Palette.Concat(Enumerable.Range(0, 256 - indexedImage.Palette.Length).Select(i => new Rgba32())).ToArray();
+
+                return Texture.CreateSimpleTexture(
+                    name: textureName,
+                    width: indexedImage.Width,
+                    height: indexedImage.Height,
+                    imageData: indexedImage.ImageData,
+                    palette: palette);
+            }
+
+
             using (var image = ImageFileIO.LoadImage(mainFile.Path))
             {
                 var colorHistogram = ColorQuantization.GetColorHistogram(new[] { image }, color => false);
@@ -782,6 +873,34 @@ namespace WadMaker
                     height: image.Height,
                     imageData: textureData,
                     palette: palette);
+            }
+        }
+
+
+
+        private static void VerifyMipmapTextureSizes(string textureName, Image<Rgba32> mainImage, IReadOnlyList<Image<Rgba32>?> mipmapImages)
+            => VerifyMipmapTextureSizes(textureName, mainImage, mipmapImages, image => (image.Width, image.Height));
+
+        private static void VerifyMipmapTextureSizes(string textureName, IndexedImage mainImage, IReadOnlyList<IndexedImage?> mipmapImages)
+            => VerifyMipmapTextureSizes(textureName, mainImage, mipmapImages, image => (image.Width, image.Height));
+
+        private static void VerifyMipmapTextureSizes<T>(string textureName, T mainImage, IReadOnlyList<T?> mipmapImages, Func<T, (int, int)> getSize)
+        {
+            // Verify main image size:
+            (var width, var height) = getSize(mainImage);
+            if (width % 16 != 0 || height % 16 != 0)
+                throw new InvalidDataException($"Texture '{textureName}' is {width}x{height}. Both width and height must be a multiple of 16.");
+
+            // Verify mipmap sizes:
+            for (int i = 1; i < mipmapImages.Count; i++)
+            {
+                var mipmapImage = mipmapImages[i - 1];
+                if (mipmapImage is null)
+                    continue;
+
+                (var mipmapWidth, var mipmapHeight) = getSize(mipmapImage);
+                if (mipmapWidth != width >> i || mipmapHeight != height >> i)
+                    throw new InvalidDataException($"Mipmap {i} for texture '{textureName}' is {mipmapWidth}x{mipmapHeight} but should be {width >> i}x{height >> i}.");
             }
         }
 

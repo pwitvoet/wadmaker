@@ -61,6 +61,14 @@ namespace WadMaker.Settings
 
 
         /// <summary>
+        /// When true, and if the source image is in an indexed format,
+        /// the source image's palette and image data are used directly,
+        /// without quantization, dithering or other type-specific processing.
+        /// </summary>
+        public bool? PreservePalette { get; set; }
+
+
+        /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed texture.
         /// Defaults to <see cref="DitheringAlgorithm.FloydSteinberg"/> for normal textures,
         /// and to <see cref="DitheringAlgorithm.None"/> for animated textures (to prevent 'flickering' animations).
@@ -135,6 +143,7 @@ namespace WadMaker.Settings
             if (overrideSettings.IsFullbrightMask != null)          IsFullbrightMask = overrideSettings.IsFullbrightMask;
             if (overrideSettings.NoFullbright != null)              NoFullbright = overrideSettings.NoFullbright;
             if (overrideSettings.FullbrightAlphaThreshold != null)  FullbrightAlphaThreshold = overrideSettings.FullbrightAlphaThreshold;
+            if (overrideSettings.PreservePalette != null)           PreservePalette = overrideSettings.PreservePalette;
             if (overrideSettings.DitheringAlgorithm != null)        DitheringAlgorithm = overrideSettings.DitheringAlgorithm;
             if (overrideSettings.DitherScale != null)               DitherScale = overrideSettings.DitherScale;
             if (overrideSettings.TransparencyThreshold != null)     TransparencyThreshold = overrideSettings.TransparencyThreshold;
@@ -156,6 +165,7 @@ namespace WadMaker.Settings
                 IsFullbrightMask == other.IsFullbrightMask &&
                 NoFullbright == other.NoFullbright &&
                 FullbrightAlphaThreshold == other.FullbrightAlphaThreshold &&
+                PreservePalette == other.PreservePalette &&
                 DitheringAlgorithm == other.DitheringAlgorithm &&
                 DitherScale == other.DitherScale &&
                 TransparencyThreshold == other.TransparencyThreshold &&

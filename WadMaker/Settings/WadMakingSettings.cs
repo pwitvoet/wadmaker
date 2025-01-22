@@ -252,6 +252,7 @@ namespace WadMaker.Settings
         const string TextureTypeKey = "texture-type";
         const string NoFullbrightKey = "no-fullbright";
         const string FullbrightAlphaThresholdKey = "fullbright-alpha-threshold";
+        const string PreservePaletteKey = "preserve-palette";
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
         const string TransparencyThresholdKey = "transparency-threshold";
@@ -299,6 +300,11 @@ namespace WadMaker.Settings
                     case FullbrightAlphaThresholdKey:
                         RequireToken(":");
                         textureSettings.FullbrightAlphaThreshold = ParseToken(byte.Parse, "fullbright alpha threshold");
+                        break;
+
+                    case PreservePaletteKey:
+                        RequireToken(":");
+                        textureSettings.PreservePalette = ParseToken(bool.Parse);
                         break;
 
                     case DitheringAlgorithmKey:
