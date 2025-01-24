@@ -1,4 +1,5 @@
 ﻿using Shared;
+using Shared.FileFormats;
 using SixLabors.ImageSharp;
 using System.Reflection;
 using System.Text;
@@ -18,7 +19,8 @@ namespace SpriteMaker
         public bool Extract { get; set; }                       // -extract         extracts all sprites in the input directory (this is also enabled if the input file is a .spr file)
         public bool ExtractAsSpriteSheet { get; set; }          // -spritesheet     extracts multi-frame sprites as spritesheets instead of image sequences
         public bool OverwriteExistingFiles { get; set; }        // -overwrite       extract mode only, enables overwriting of existing image files (off by default)
-        public bool ExtractAsGif { get; set; }                  // -gif             extract sprites as (animated) gif files
+        public ImageFormat OutputImageFormat { get; set; }      // -format          Extracted images output format (png, jpg, gif, bmp or tga).
+        public bool ExtractAsIndexed { get; set; }              // -indexed         Extracted images are indexed and contain the original texture's palette. Only works with png, gif and bmp.
 
         // Other settings:
         public string InputPath { get; set; } = "";             // An image or sprite file, or a directory full of images (or sprites, if -extract is set)
@@ -53,13 +55,26 @@ namespace SpriteMaker
                 if (settings.Extract)
                 {
                     var extractionFormat = settings.ExtractAsSpriteSheet ? ExtractionFormat.Spritesheet :
-                                                   settings.ExtractAsGif ? ExtractionFormat.Gif :
+                           settings.OutputImageFormat == ImageFormat.Gif ? ExtractionFormat.AnimatedGif :
                                                                            ExtractionFormat.ImageSequence;
 
-                    if (!string.IsNullOrEmpty(Path.GetExtension(settings.InputPath)))
-                        SpriteExtracting.ExtractSingleSprite(settings.InputPath, settings.OutputPath, extractionFormat, settings.OverwriteExistingFiles, logger);
+                    var extractionSettings = new ExtractionSettings {
+                        OverwriteExistingFiles = settings.OverwriteExistingFiles,
+                        IncludeSubDirectories = settings.IncludeSubDirectories,
+                        ExtractionFormat = extractionFormat,
+                        OutputFormat = settings.OutputImageFormat,
+                        SaveAsIndexed = settings.ExtractAsIndexed,
+                    };
+
+                    var inputIsFile = !string.IsNullOrEmpty(Path.GetExtension(settings.InputPath));
+                    if (inputIsFile)
+                    {
+                        SpriteExtracting.ExtractSingleSprite(settings.InputPath, settings.OutputPath, extractionSettings, logger);
+                    }
                     else
-                        SpriteExtracting.ExtractSprites(settings.InputPath, settings.OutputPath, extractionFormat, settings.OverwriteExistingFiles, settings.IncludeSubDirectories, logger);
+                    {
+                        SpriteExtracting.ExtractSprites(settings.InputPath, settings.OutputPath, extractionSettings, logger);
+                    }
                 }
                 else
                 {
@@ -84,7 +99,7 @@ namespace SpriteMaker
             }
         }
 
-        static ProgramSettings ParseArguments(string[] args)
+        private static ProgramSettings ParseArguments(string[] args)
         {
             var settings = new ProgramSettings();
 
@@ -101,8 +116,17 @@ namespace SpriteMaker
                     case "-extract": settings.Extract = true; break;
                     case "-spritesheet": settings.ExtractAsSpriteSheet = true; break;
                     case "-overwrite": settings.OverwriteExistingFiles = true; break;
-                    case "-gif": settings.ExtractAsGif = true; break;
+
+                    case "-format":
+                        if (index >= args.Length)
+                            throw new InvalidUsageException("The -format parameter must be set to either png, jpg, gif, bmp or tga.");
+
+                        settings.OutputImageFormat = ParseOutputImageFormat(args[index++]);
+                        break;
+
+                    case "-indexed": settings.ExtractAsIndexed = true; break;
                     case "-nologfile": settings.DisableFileLogging = true; break;
+
                     default: throw new InvalidUsageException($"Unknown argument: '{arg}'.");
                 }
             }
@@ -126,7 +150,7 @@ namespace SpriteMaker
                     settings.OutputPath = args[index++];
 
                     if (Path.GetExtension(settings.OutputPath).ToLowerInvariant() == ".gif")
-                        settings.ExtractAsGif = true;
+                        settings.OutputImageFormat = ImageFormat.Gif;
                 }
                 else
                 {
@@ -134,7 +158,7 @@ namespace SpriteMaker
                     if (inputIsFile)
                     {
                         // By default, put the output image(s) in the same directory:
-                        settings.OutputPath = Path.ChangeExtension(settings.InputPath, ".png");
+                        settings.OutputPath = Path.ChangeExtension(settings.InputPath, "." + ImageFileIO.GetDefaultExtension(settings.OutputImageFormat));
                     }
                     else
                     {
@@ -171,8 +195,22 @@ namespace SpriteMaker
             return settings;
         }
 
+        private static ImageFormat ParseOutputImageFormat(string str)
+        {
+            switch (str.ToLowerInvariant())
+            {
+                case "png": return ImageFormat.Png;
+                case "jpg": return ImageFormat.Jpg;
+                case "gif": return ImageFormat.Gif;
+                case "bmp": return ImageFormat.Bmp;
+                case "tga": return ImageFormat.Tga;
 
-        static void Log(string? message)
+                default: throw new InvalidDataException($"Unknown image format: {str}.");
+            }
+        }
+
+
+        private static void Log(string? message)
         {
             Console.WriteLine(message);
             LogFile?.WriteLine(message);

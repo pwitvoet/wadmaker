@@ -6,6 +6,8 @@ using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using SixLabors.ImageSharp;
 using System.Diagnostics;
 using Shared;
+using Shared.FileFormats;
+using Shared.FileFormats.Indexed;
 
 namespace SpriteMaker
 {
@@ -13,17 +15,26 @@ namespace SpriteMaker
     {
         ImageSequence,
         Spritesheet,
-        Gif,
+        AnimatedGif,
     }
+
+    public class ExtractionSettings
+    {
+        public bool OverwriteExistingFiles { get; set; }
+        public bool IncludeSubDirectories { get; set; }
+
+        public ExtractionFormat ExtractionFormat { get; set; }
+        public ImageFormat OutputFormat { get; set; }
+        public bool SaveAsIndexed { get; set; }
+    }
+
 
     public static class SpriteExtracting
     {
         public static void ExtractSprites(
             string inputDirectory,
             string outputDirectory,
-            ExtractionFormat extractionFormat,
-            bool overwriteExistingFiles,
-            bool includeSubDirectories,
+            ExtractionSettings extractionSettings,
             Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -33,9 +44,7 @@ namespace SpriteMaker
             (var spriteCount, var imageFilesCreated, var imageFilesSkipped) = ExtractSpritesFromDirectory(
                 inputDirectory,
                 outputDirectory,
-                extractionFormat,
-                overwriteExistingFiles,
-                includeSubDirectories,
+                extractionSettings,
                 logger);
 
             logger.Log($"Extracted {imageFilesCreated} images from {spriteCount} sprites from '{inputDirectory}' to '{outputDirectory}' (skipped {imageFilesSkipped} existing files), in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
@@ -44,26 +53,23 @@ namespace SpriteMaker
         public static void ExtractSingleSprite(
             string inputPath,
             string outputPath,
-            ExtractionFormat extractionFormat,
-            bool overwriteExistingFiles,
+            ExtractionSettings extractionSettings,
             Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
 
             logger.Log($"Extracting sprite '{inputPath}' to '{outputPath}'.");
 
-            (var success, var imageFilesCreated, var imageFilesSkipped) = ExtractSprite(inputPath, outputPath, extractionFormat, overwriteExistingFiles, logger);
+            (var success, var imageFilesCreated, var imageFilesSkipped) = ExtractSprite(inputPath, outputPath, extractionSettings, logger);
 
             logger.Log($"Extracted '{inputPath}' to '{outputPath}' (created {imageFilesCreated} files, skipped {imageFilesSkipped} existing files), in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
 
-        static (int spriteCount, int imageFilesCreated, int imageFilesSkipped) ExtractSpritesFromDirectory(
+        private static (int spriteCount, int imageFilesCreated, int imageFilesSkipped) ExtractSpritesFromDirectory(
             string inputDirectory,
             string outputDirectory,
-            ExtractionFormat extractionFormat,
-            bool overwriteExistingFiles,
-            bool includeSubDirectories,
+            ExtractionSettings extractionSettings,
             Logger logger)
         {
             var spriteCount = 0;
@@ -76,9 +82,8 @@ namespace SpriteMaker
             {
                 (var success, var imagesCreated, var imagesSkipped) = ExtractSprite(
                     path,
-                    Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(path) + ".spr"),
-                    extractionFormat,
-                    overwriteExistingFiles,
+                    Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(path) + "." + ImageFileIO.GetDefaultExtension(extractionSettings.OutputFormat)),
+                    extractionSettings,
                     logger);
 
                 if (success)
@@ -89,16 +94,14 @@ namespace SpriteMaker
                 }
             }
 
-            if (includeSubDirectories)
+            if (extractionSettings.IncludeSubDirectories)
             {
                 foreach (var subDirectory in Directory.EnumerateDirectories(inputDirectory))
                 {
                     (var subSpriteCount, var subFilesCreated, var imagesSkipped) = ExtractSpritesFromDirectory(
                         subDirectory,
                         Path.Combine(outputDirectory, Path.GetFileName(subDirectory)),
-                        extractionFormat,
-                        overwriteExistingFiles,
-                        includeSubDirectories,
+                        extractionSettings,
                         logger);
 
                     spriteCount += subSpriteCount;
@@ -110,11 +113,10 @@ namespace SpriteMaker
             return (spriteCount, imageFilesCreated, imageFilesSkipped);
         }
 
-        static (bool success, int imageFilesCreated, int imageFilesSkipped) ExtractSprite(
+        private static (bool success, int imageFilesCreated, int imageFilesSkipped) ExtractSprite(
             string inputPath,
             string outputPath,
-            ExtractionFormat extractionFormat,
-            bool overwriteExistingFiles,
+            ExtractionSettings extractionSettings,
             Logger logger)
         {
             try
@@ -123,23 +125,23 @@ namespace SpriteMaker
 
                 var sprite = Sprite.Load(inputPath);
 
-                switch (extractionFormat)
+                switch (extractionSettings.ExtractionFormat)
                 {
                     default:
                     case ExtractionFormat.ImageSequence:
                     {
-                        return SaveSpriteAsImageSequence(sprite, outputPath, overwriteExistingFiles, logger);
+                        return SaveSpriteAsImageSequence(sprite, outputPath, extractionSettings, logger);
                     }
 
                     case ExtractionFormat.Spritesheet:
                     {
-                        var success = SaveSpriteAsSpritesheet(sprite, outputPath, overwriteExistingFiles, logger);
+                        var success = SaveSpriteAsSpritesheet(sprite, outputPath, extractionSettings, logger);
                         return (success, success ? 1 : 0, success ? 0 : 1);
                     }
 
-                    case ExtractionFormat.Gif:
+                    case ExtractionFormat.AnimatedGif:
                     {
-                        var success = SaveSpriteAsGif(sprite, outputPath, overwriteExistingFiles, logger);
+                        var success = SaveSpriteAsGif(sprite, outputPath, extractionSettings, logger);
                         return (success, success ? 1 : 0, success ? 0 : 1);
                     }
                 }
@@ -151,11 +153,10 @@ namespace SpriteMaker
             }
         }
 
-        static (bool success, int imageFilesCreated, int imageFilesSkipped) SaveSpriteAsImageSequence(Sprite sprite, string outputPath, bool overwriteExistingFiles, Logger logger)
+        private static (bool success, int imageFilesCreated, int imageFilesSkipped) SaveSpriteAsImageSequence(Sprite sprite, string outputPath, ExtractionSettings extractionSettings, Logger logger)
         {
             var imageFilesSaved = 0;
             var imageFilesSkipped = 0;
-            var imageEncoder = new PngEncoder { };
 
             for (int i = 0; i < sprite.Frames.Count; i++)
             {
@@ -172,23 +173,33 @@ namespace SpriteMaker
                 if (offset.X != 0 || offset.Y != 0)
                     spriteFilenameSettings.FrameOffset = offset;
 
-                var imageOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".png");
-                if (overwriteExistingFiles || !File.Exists(imageOutputPath))
+                var imageOutputPath = spriteFilenameSettings.InsertIntoFilename(outputPath);
+                if (extractionSettings.OverwriteExistingFiles || !File.Exists(imageOutputPath))
                 {
                     logger.Log($"- Creating image file '{imageOutputPath}'.");
-                    using (var image = new Image<Rgba32>((int)spriteFrame.FrameWidth, (int)spriteFrame.FrameHeight))
-                    {
-                        var imageFrame = image.Frames[0];
-                        CopySpriteFrameToImageFrame(
-                            spriteFrame,
-                            new Rectangle(0, 0, (int)spriteFrame.FrameWidth, (int)spriteFrame.FrameHeight),
-                            imageFrame,
-                            new Rectangle(0, 0, imageFrame.Width, imageFrame.Height),
-                            sprite.TextureFormat,
-                            sprite.Palette);
 
-                        image.Save(imageOutputPath, imageEncoder);
+                    if (extractionSettings.SaveAsIndexed)
+                    {
+                        var indexedImage = new IndexedImage(spriteFrame.ImageData, (int)spriteFrame.FrameWidth, (int)spriteFrame.FrameHeight, sprite.Palette);
+                        ImageFileIO.SaveIndexedImage(indexedImage, imageOutputPath, extractionSettings.OutputFormat);
                         imageFilesSaved += 1;
+                    }
+                    else
+                    {
+                        using (var image = new Image<Rgba32>((int)spriteFrame.FrameWidth, (int)spriteFrame.FrameHeight))
+                        {
+                            var imageFrame = image.Frames[0];
+                            CopySpriteFrameToImageFrame(
+                                spriteFrame,
+                                new Rectangle(0, 0, (int)spriteFrame.FrameWidth, (int)spriteFrame.FrameHeight),
+                                imageFrame,
+                                new Rectangle(0, 0, imageFrame.Width, imageFrame.Height),
+                                sprite.TextureFormat,
+                                sprite.Palette);
+
+                            ImageFileIO.SaveImage(image, imageOutputPath, extractionSettings.OutputFormat);
+                            imageFilesSaved += 1;
+                        }
                     }
                 }
                 else
@@ -201,7 +212,7 @@ namespace SpriteMaker
             return (true, imageFilesSaved, imageFilesSkipped);
         }
 
-        static bool SaveSpriteAsSpritesheet(Sprite sprite, string outputPath, bool overwriteExistingFiles, Logger logger)
+        private static bool SaveSpriteAsSpritesheet(Sprite sprite, string outputPath, ExtractionSettings extractionSettings, Logger logger)
         {
             var spriteFilenameSettings = new SpriteFilenameSettings
             {
@@ -210,8 +221,8 @@ namespace SpriteMaker
                 SpritesheetTileSize = new Size((int)sprite.MaximumWidth, (int)sprite.MaximumHeight),
             };
 
-            var spritesheetOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".png");
-            if (!overwriteExistingFiles && File.Exists(spritesheetOutputPath))
+            var spritesheetOutputPath = spriteFilenameSettings.InsertIntoFilename(outputPath);
+            if (!extractionSettings.OverwriteExistingFiles && File.Exists(spritesheetOutputPath))
             {
                 logger.Log($"- Skipping image file '{spritesheetOutputPath}' because it already exists.");
                 return false;
@@ -222,30 +233,53 @@ namespace SpriteMaker
             //       So frames with custom origins will just be cut off here. For these kind of sprites image sequences should be used instead.
 
             logger.Log($"- Creating image file '{spritesheetOutputPath}'.");
-            using (var image = new Image<Rgba32>((int)sprite.MaximumWidth * sprite.Frames.Count, (int)sprite.MaximumHeight))
+
+            var tileWidth = (int)sprite.MaximumWidth;
+            var tileHeight = (int)sprite.MaximumHeight;
+            var spritesheetWidth = tileWidth * sprite.Frames.Count;
+            var spritesheetHeight = tileHeight;
+
+            if (extractionSettings.SaveAsIndexed)
             {
+                var indexedImage = new IndexedImage(new byte[spritesheetWidth * spritesheetHeight], spritesheetWidth, spritesheetHeight, sprite.Palette);
                 for (int i = 0; i < sprite.Frames.Count; i++)
                 {
                     var spriteFrame = sprite.Frames[i];
-                    var tileArea = new Rectangle(i * (int)sprite.MaximumWidth, 0, (int)sprite.MaximumWidth, (int)sprite.MaximumHeight);
+                    var tileArea = new Rectangle(i * tileWidth, 0, tileWidth, tileHeight);
                     (var sourceArea, var destinationArea) = GetFrameSourceAndDestinationAreas(spriteFrame, tileArea);
 
-                    CopySpriteFrameToImageFrame(
-                        spriteFrame,
-                        sourceArea,
-                        image.Frames[0],
-                        destinationArea,
-                        sprite.TextureFormat,
-                        sprite.Palette);
+                    CopySpriteFrameToIndexedImageFrame(spriteFrame, sourceArea, indexedImage.Frames[0], destinationArea);
                 }
 
-                image.Save(spritesheetOutputPath, new PngEncoder { });
+                ImageFileIO.SaveIndexedImage(indexedImage, spritesheetOutputPath, extractionSettings.OutputFormat);
+            }
+            else
+            {
+                using (var image = new Image<Rgba32>(spritesheetWidth, spritesheetHeight))
+                {
+                    for (int i = 0; i < sprite.Frames.Count; i++)
+                    {
+                        var spriteFrame = sprite.Frames[i];
+                        var tileArea = new Rectangle(i * tileWidth, 0, tileWidth, tileHeight);
+                        (var sourceArea, var destinationArea) = GetFrameSourceAndDestinationAreas(spriteFrame, tileArea);
+
+                        CopySpriteFrameToImageFrame(
+                            spriteFrame,
+                            sourceArea,
+                            image.Frames[0],
+                            destinationArea,
+                            sprite.TextureFormat,
+                            sprite.Palette);
+                    }
+
+                    ImageFileIO.SaveImage(image, spritesheetOutputPath, extractionSettings.OutputFormat);
+                }
             }
 
             return true;
         }
 
-        static bool SaveSpriteAsGif(Sprite sprite, string outputPath, bool overwriteExistingFiles, Logger logger)
+        private static bool SaveSpriteAsGif(Sprite sprite, string outputPath, ExtractionSettings extractionSettings, Logger logger)
         {
             var spriteFilenameSettings = new SpriteFilenameSettings
             {
@@ -255,7 +289,7 @@ namespace SpriteMaker
             };
 
             var gifOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".gif");
-            if (!overwriteExistingFiles && File.Exists(gifOutputPath))
+            if (!extractionSettings.OverwriteExistingFiles && File.Exists(gifOutputPath))
             {
                 logger.Log($"- Skipping image file '{gifOutputPath}' because it already exists.");
                 return false;
@@ -264,6 +298,12 @@ namespace SpriteMaker
             // NOTE: Support for custom frame offsets is limited when extracting as gif, for the same reasons as with spritesheets.
 
             logger.Log($"- Creating image file '{gifOutputPath}'.");
+
+            // NOTE: Gif files are always indexed.
+            // TODO: The PaletteQuantizer that is used here has limited accuracy, so this is a lossy process!
+            //       Unfortunately, it's not possible to save the sprite data exactly as-is with the current version of ImageSharp:
+            //       that would require a custom quantizer (possible) and the gif encoder would have to use that quantizer for all frames
+            //       (currently it only uses it for the first frame, and it then uses a PaletteQuantizer for all subsequent frames).
             using (var image = new Image<Rgba32>((int)sprite.MaximumWidth, (int)sprite.MaximumHeight))
             {
                 while (image.Frames.Count < sprite.Frames.Count)
@@ -287,7 +327,8 @@ namespace SpriteMaker
                 image.Save(gifOutputPath, new GifEncoder
                 {
                     ColorTableMode = GifColorTableMode.Global,
-                    PixelSamplingStrategy = new ExtensivePixelSamplingStrategy(), // TODO: Is this needed??
+                    PixelSamplingStrategy = new ExtensivePixelSamplingStrategy(),
+                    // TODO: This quantizer lops off the lowest 3 bits of each channel, so colors that are close together will be lumped together!
                     Quantizer = new PaletteQuantizer(new ReadOnlyMemory<Color>(sprite.Palette.Select(rgba32 => new Color(rgba32)).ToArray()), new QuantizerOptions
                     {
                         MaxColors = 256,
@@ -299,7 +340,7 @@ namespace SpriteMaker
             return true;
         }
 
-        static (Rectangle sourceArea, Rectangle destinationArea) GetFrameSourceAndDestinationAreas(Frame frame, Rectangle tileArea)
+        private static (Rectangle sourceArea, Rectangle destinationArea) GetFrameSourceAndDestinationAreas(Frame frame, Rectangle tileArea)
         {
             // Frame offset (most frames have an offset of (0, 0), which means they're put in the center):
             var frameOffset = new Point(frame.FrameOriginX + ((int)frame.FrameWidth / 2), frame.FrameOriginY - ((int)frame.FrameHeight / 2));
@@ -323,7 +364,7 @@ namespace SpriteMaker
             return (sourceArea, destinationArea);
         }
 
-        static void CopySpriteFrameToImageFrame(
+        private static void CopySpriteFrameToImageFrame(
             Frame spriteFrame,
             Rectangle sourceArea,
             ImageFrame<Rgba32> imageFrame,
@@ -364,8 +405,27 @@ namespace SpriteMaker
             Rgba32 GetPaletteColor(byte index) => palette[index];
         }
 
+        private static void CopySpriteFrameToIndexedImageFrame(
+            Frame spriteFrame,
+            Rectangle sourceArea,
+            IndexedImageFrame indexedImageFrame,
+            Rectangle destinationArea)
+        {
+            if (sourceArea.Width > destinationArea.Width || sourceArea.Height > destinationArea.Height)
+                throw new InvalidOperationException($"Cannot copy sprite frame, image frame too small (must be at least {sourceArea.Width}x{sourceArea.Height} but is {destinationArea.Width}x{destinationArea.Height}).");
 
-        static void CreateDirectory(string? path)
+            for (int dy = 0; dy < sourceArea.Height; dy++)
+            {
+                for (int dx = 0; dx < sourceArea.Width; dx++)
+                {
+                    var index = spriteFrame.ImageData[(sourceArea.Y + dy) * spriteFrame.FrameWidth + (sourceArea.X + dx)];
+                    indexedImageFrame[destinationArea.X + dx, destinationArea.Y + dy] = index;
+                }
+            }
+        }
+
+
+        private static void CreateDirectory(string? path)
         {
             if (!string.IsNullOrEmpty(path))
                 Directory.CreateDirectory(path);
