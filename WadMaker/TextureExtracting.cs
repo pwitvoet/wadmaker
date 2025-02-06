@@ -21,6 +21,9 @@ namespace WadMaker
 
     public static class TextureExtracting
     {
+        private const int FirstFullbrightPaletteIndex = 224;
+
+
         public static void ExtractTextures(string inputFilePath, string outputDirectory, ExtractionSettings settings, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -61,7 +64,7 @@ namespace WadMaker
 
                         if (!settings.OverwriteExistingFiles && File.Exists(filePath))
                         {
-                            logger.Log($"- WARNING: '{filePath}' already exist. Skipping texture.");
+                            logger.Log($"- WARNING: '{filePath}' already exists. Skipping texture.");
                             continue;
                         }
 
@@ -87,15 +90,21 @@ namespace WadMaker
                             }
 
                             // Create fullbright mask images for textures/mipmaps that contain fullbright pixels:
-                            if (isFullbrightTexture && !settings.NoFullbrightMasks && texture.GetImageData(mipmap)?.Any(index => index >= 224) == true)
+                            if (isFullbrightTexture && !settings.NoFullbrightMasks && texture.GetImageData(mipmap)?.Any(index => index >= FirstFullbrightPaletteIndex) == true)
                             {
+                                fileSettings.IsFullbrightMask = true;
+                                var fullbrightFilePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
+
+                                if (!settings.OverwriteExistingFiles && File.Exists(fullbrightFilePath))
+                                {
+                                    logger.Log($"- WARNING: '{fullbrightFilePath}' already exists. Skipping fullbright mask.");
+                                    continue;
+                                }
+
                                 using (var image = TextureToFullbrightMaskImage(texture, mipmap))
                                 {
                                     if (image != null)
                                     {
-                                        fileSettings.IsFullbrightMask = true;
-                                        var fullbrightFilePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
-
                                         ImageFileIO.SaveImage(image, fullbrightFilePath, settings.OutputFormat);
                                         imageFilesCreated += 1;
                                     }
@@ -210,7 +219,7 @@ namespace WadMaker
                     for (int x = 0; x < image.Width; x++)
                     {
                         var paletteIndex = imageData[y * width + x];
-                        if (paletteIndex < 224)
+                        if (paletteIndex < FirstFullbrightPaletteIndex)
                         {
                             rowSpan[x] = new Rgba32(0, 0, 0, 0);
                         }
