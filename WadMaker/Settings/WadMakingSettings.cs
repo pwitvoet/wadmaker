@@ -123,8 +123,6 @@ namespace WadMaker.Settings
 
         /// <summary>
         /// Reads texture settings from the wadmaker.config file in the given folder, if it exists.
-        /// Also reads and updates wadmaker.dat, for tracking last-modified times for each individual rule,
-        /// so only textures that are affected by a modified rule will be rebuilt.
         /// </summary>
         public static WadMakingSettings Load(string folder)
         {
@@ -203,6 +201,7 @@ namespace WadMaker.Settings
             return Path.ChangeExtension(filename, sb.ToString() + extension);
         }
 
+
         private static bool TryParseTextureType(string str, out TextureType textureType)
         {
             switch (str)
@@ -273,7 +272,6 @@ namespace WadMaker.Settings
             var i = 0;
             var namePattern = Path.GetFileName(tokens[i++]).ToLowerInvariant();
             var textureSettings = new TextureSettings();
-            var isRemoved = false;
             while (i < tokens.Length)
             {
                 var token = tokens[i++];
@@ -357,7 +355,7 @@ namespace WadMaker.Settings
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
             }
-            return new Rule(namePattern, isRemoved ? null : (TextureSettings?)textureSettings);
+            return new Rule(namePattern, textureSettings);
 
 
             void RequireToken(string value)

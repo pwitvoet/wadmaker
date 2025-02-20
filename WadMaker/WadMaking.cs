@@ -72,15 +72,12 @@ namespace WadMaker
                     if (isValid)
                     {
                         // Can we skip this texture (when updating an existing wad file)?
-                        if (doIncrementalUpdate && isExistingTexture)
+                        if (doIncrementalUpdate && isExistingTexture && !HasBeenModified(textureName, textureSourceFiles, wadMakingHistory))
                         {
-                            if (!HasBeenModified(textureName, textureSourceFiles, wadMakingHistory))
-                            {
-                                successfulTextureInputs[textureName] = textureSourceFiles;
+                            successfulTextureInputs[textureName] = textureSourceFiles;
 
-                                logger.Log($"- No changes detected for '{textureName}', skipping update.");
-                                continue;
-                            }
+                            logger.Log($"- No changes detected for '{textureName}', skipping update.");
+                            continue;
                         }
 
 
@@ -288,7 +285,8 @@ namespace WadMaker
             // TODO: Moving a texture folder will result in different paths... so maybe use relative paths instead?
             foreach (var sourceFile in textureSourceFiles)
             {
-                var previousSourceFile = previousSourceFiles.FirstOrDefault(file => file.Path == sourceFile.Path);
+                var sourceFileName = Path.GetFileName(sourceFile.Path);
+                var previousSourceFile = previousSourceFiles.FirstOrDefault(file => Path.GetFileName(file.Path) == sourceFileName);
                 if (previousSourceFile is null)
                     return true;
 

@@ -1,9 +1,4 @@
-﻿using Shared;
-using Shared.FileSystem;
-using Shared.JSON;
-using SixLabors.ImageSharp.PixelFormats;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json;
 using FileInfo = Shared.FileSystem.FileInfo;
 
 namespace WadMaker.Settings
