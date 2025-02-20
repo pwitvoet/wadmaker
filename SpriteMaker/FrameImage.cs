@@ -1,5 +1,6 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using SpriteMaker.Settings;
 
 namespace SpriteMaker
 {

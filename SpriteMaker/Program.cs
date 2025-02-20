@@ -1,6 +1,7 @@
 ﻿using Shared;
 using Shared.FileFormats;
 using SixLabors.ImageSharp;
+using SpriteMaker.Settings;
 using System.Reflection;
 using System.Text;
 

@@ -8,6 +8,7 @@ using System.Diagnostics;
 using Shared;
 using Shared.FileFormats;
 using Shared.FileFormats.Indexed;
+using SpriteMaker.Settings;
 
 namespace SpriteMaker
 {
@@ -162,18 +163,17 @@ namespace SpriteMaker
             {
                 var spriteFrame = sprite.Frames[i];
 
-                var spriteFilenameSettings = new SpriteFilenameSettings
-                {
-                    Type = sprite.Type,
-                    TextureFormat = sprite.TextureFormat,
+                var filenameSettings = new SpriteSettings {
+                    SpriteType = sprite.Type,
+                    SpriteTextureFormat = sprite.TextureFormat,
                     FrameNumber = i,
                 };
 
                 var offset = new Point(spriteFrame.FrameOriginX + ((int)spriteFrame.FrameWidth / 2), spriteFrame.FrameOriginY - ((int)spriteFrame.FrameHeight / 2));
                 if (offset.X != 0 || offset.Y != 0)
-                    spriteFilenameSettings.FrameOffset = offset;
+                    filenameSettings.FrameOffset = offset;
 
-                var imageOutputPath = spriteFilenameSettings.InsertIntoFilename(outputPath);
+                var imageOutputPath = SpriteMakingSettings.InsertSpriteSettingsIntoFilename(outputPath, filenameSettings);
                 if (extractionSettings.OverwriteExistingFiles || !File.Exists(imageOutputPath))
                 {
                     logger.Log($"- Creating image file '{imageOutputPath}'.");
@@ -214,14 +214,13 @@ namespace SpriteMaker
 
         private static bool SaveSpriteAsSpritesheet(Sprite sprite, string outputPath, ExtractionSettings extractionSettings, Logger logger)
         {
-            var spriteFilenameSettings = new SpriteFilenameSettings
-            {
-                Type = sprite.Type,
-                TextureFormat = sprite.TextureFormat,
+            var filenameSettings = new SpriteSettings {
+                SpriteType = sprite.Type,
+                SpriteTextureFormat = sprite.TextureFormat,
                 SpritesheetTileSize = new Size((int)sprite.MaximumWidth, (int)sprite.MaximumHeight),
             };
 
-            var spritesheetOutputPath = spriteFilenameSettings.InsertIntoFilename(outputPath);
+            var spritesheetOutputPath = SpriteMakingSettings.InsertSpriteSettingsIntoFilename(outputPath, filenameSettings);
             if (!extractionSettings.OverwriteExistingFiles && File.Exists(spritesheetOutputPath))
             {
                 logger.Log($"- Skipping image file '{spritesheetOutputPath}' because it already exists.");
@@ -281,14 +280,13 @@ namespace SpriteMaker
 
         private static bool SaveSpriteAsGif(Sprite sprite, string outputPath, ExtractionSettings extractionSettings, Logger logger)
         {
-            var spriteFilenameSettings = new SpriteFilenameSettings
-            {
-                Type = sprite.Type,
-                TextureFormat = sprite.TextureFormat,
+            var filenameSettings = new SpriteSettings {
+                SpriteType = sprite.Type,
+                SpriteTextureFormat = sprite.TextureFormat,
                 SpritesheetTileSize = new Size((int)sprite.MaximumWidth, (int)sprite.MaximumHeight),
             };
 
-            var gifOutputPath = Path.ChangeExtension(spriteFilenameSettings.InsertIntoFilename(outputPath), ".gif");
+            var gifOutputPath = SpriteMakingSettings.InsertSpriteSettingsIntoFilename(Path.ChangeExtension(outputPath, ".gif"), filenameSettings);
             if (!extractionSettings.OverwriteExistingFiles && File.Exists(gifOutputPath))
             {
                 logger.Log($"- Skipping image file '{gifOutputPath}' because it already exists.");

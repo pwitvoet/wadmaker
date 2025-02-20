@@ -6,6 +6,8 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using SpriteMaker.Settings;
+using FileInfo = Shared.FileSystem.FileInfo;
 
 namespace SpriteMaker
 {
@@ -32,20 +34,18 @@ namespace SpriteMaker
             var inputDirectory = Path.GetDirectoryName(inputPath)!;
             var spriteName = SpriteMakingSettings.GetSpriteName(inputPath);
             var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
-            var imagePaths = Directory.EnumerateFiles(inputDirectory)
-                .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
+            var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
+
+            // Gather input files:
+            var spriteSourceFiles = GetInputFilePaths(inputDirectory)
                 .Where(path => SpriteMakingSettings.GetSpriteName(path) == spriteName)
-                .Where(path =>
-                {
-                    var settings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings;
-                    return settings.Ignore != true && (ImageFileIO.CanLoad(path) || settings.Converter != null);
-                })
+                .Select(spriteMakingSettings.GetSpriteSourceFileInfo)
+                .Where(file => file.Settings.Ignore != true && (ImageFileIO.CanLoad(file.Path) || !string.IsNullOrEmpty(file.Settings.Converter)))
                 .ToArray();
 
-            var conversionOutputDirectory = Path.Combine(inputDirectory, Guid.NewGuid().ToString());
             try
             {
-                var success = MakeSprite(spriteName, imagePaths, outputPath, spriteMakingSettings, conversionOutputDirectory, true, logger);
+                var success = MakeSprite(spriteName, spriteSourceFiles, outputPath, spriteMakingSettings, conversionOutputDirectory, logger);
             }
             finally
             {
@@ -60,99 +60,116 @@ namespace SpriteMaker
                 }
             }
 
-            logger.Log($"Created '{outputPath}' (from '{imagePaths.First()}'{(imagePaths.Length > 1 ? $" + {imagePaths.Length - 1} more files" : "")}) in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
+            logger.Log($"Created '{outputPath}' (from '{spriteSourceFiles.First().Path}'{(spriteSourceFiles.Length > 1 ? $" + {spriteSourceFiles.Length - 1} more files" : "")}) in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
 
-        static (int spritesAdded, int spritesUpdated, int spritesRemoved) MakeSpritesFromImagesDirectory(
+        private static (int spritesAdded, int spritesUpdated, int spritesRemoved) MakeSpritesFromImagesDirectory(
             string inputDirectory,
             string outputDirectory,
-            bool fullRebuild,
+            bool doFullRebuild,
             bool includeSubDirectories,
             bool enableSubDirectoryRemoving,
             Logger logger)
         {
+            // We can do an incremental build if we have information about the previous build operation, and if the output directory already exists:
+            var spriteMakingHistory = SpriteMakingHistory.Load(inputDirectory);
+            var doIncrementalUpdate = !doFullRebuild && Directory.Exists(outputDirectory) && spriteMakingHistory != null;
+
+            var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
+            var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
+
+            // Gather input files:
+            var spriteSourceFileGroups = GetInputFilePaths(inputDirectory)
+                .Select(spriteMakingSettings.GetSpriteSourceFileInfo)
+                .Where(file => file.Settings.Ignore != true && (ImageFileIO.CanLoad(file.Path) || !string.IsNullOrEmpty(file.Settings.Converter)))
+                .GroupBy(file => SpriteMakingSettings.GetSpriteName(file.Path))
+                .ToArray();
+
+            // Keep track of some statistics, to keep the user informed:
             var spritesAdded = 0;
             var spritesUpdated = 0;
             var spritesRemoved = 0;
 
-            var spriteMakingSettings = SpriteMakingSettings.Load(inputDirectory);
-            var currentFileHashes = new Dictionary<string, byte[]?>();
-            var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
-
             CreateDirectory(outputDirectory);
 
-            // Multiple files can map to the same sprite, due to different extensions, filename suffixes and upper/lower-case differences.
-            // We'll group files by sprite name, to make these collisions easy to detect:
-            var allInputDirectoryFiles = Directory.EnumerateFiles(inputDirectory, "*").ToHashSet();
-            var spriteImagePaths = allInputDirectoryFiles
-                .Where(path => !SpriteMakingSettings.IsConfigurationFile(path))
-                .Where(path =>
-                {
-                    var settings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path)).settings;
-                    return settings.Ignore != true && (ImageFileIO.CanLoad(path) || settings.Converter != null);
-                })
-                .GroupBy(path => SpriteMakingSettings.GetSpriteName(path));
+            var successfulSpriteInputs = new Dictionary<string, SpriteMakingHistory.SpriteHistory>();
 
             try
             {
-                // Loop over all the groups of input images (each group, if valid, will produce one output sprite):
-                foreach (var imagePathsGroup in spriteImagePaths)
+                // Create sprites and save them to the output directory:
+                foreach (var spriteSourceFileGroup in spriteSourceFileGroups)
                 {
-                    var spriteName = imagePathsGroup.Key;
+                    var spriteName = spriteSourceFileGroup.Key;
+                    var spriteSourceFiles = spriteSourceFileGroup.ToArray();
+
                     var outputSpritePath = Path.Combine(outputDirectory, spriteName + ".spr");
                     var isExistingSprite = File.Exists(outputSpritePath);
 
+                    // Can we skip this sprite (when updating an existing output directory)?
+                    if (doIncrementalUpdate && isExistingSprite && !HasBeenModified(spriteName, outputSpritePath, spriteSourceFiles, spriteMakingHistory))
+                    {
+                        var outputFile = FileInfo.FromFile(outputSpritePath);
+                        successfulSpriteInputs[spriteName] = new SpriteMakingHistory.SpriteHistory(outputFile, spriteSourceFiles);
+
+                        logger.Log($"- No changes detected for '{spriteName}', skipping update.");
+                        continue;
+                    }
+
                     var success = MakeSprite(
                         spriteName,
-                        imagePathsGroup,
+                        spriteSourceFiles,
                         outputSpritePath,
                         spriteMakingSettings,
                         conversionOutputDirectory,
-                        fullRebuild,
-                        logger,
-                        currentFileHashes);
+                        logger);
 
                     if (success)
                     {
-                        var inputImageCount = imagePathsGroup.Count();
+                        var outputFile = FileInfo.FromFile(outputSpritePath);
+                        successfulSpriteInputs[spriteName] = new SpriteMakingHistory.SpriteHistory(outputFile, spriteSourceFiles);
+
                         if (isExistingSprite)
                         {
                             spritesUpdated += 1;
-                            logger.Log($"- Updated sprite '{outputSpritePath}' (from '{imagePathsGroup.First()}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
+                            logger.Log($"- Updated sprite '{outputSpritePath}' (from '{spriteSourceFiles.First().Path}'{(spriteSourceFiles.Length > 1 ? $" + {spriteSourceFiles.Length - 1} more files" : "")}).");
                         }
                         else
                         {
                             spritesAdded += 1;
-                            logger.Log($"- Added sprite '{outputSpritePath}' (from '{imagePathsGroup.First()}'{(inputImageCount > 1 ? $" + {inputImageCount - 1} more files" : "")}).");
+                            logger.Log($"- Added sprite '{outputSpritePath}' (from '{spriteSourceFiles.First().Path}'{(spriteSourceFiles.Length > 1 ? $" + {spriteSourceFiles.Length - 1} more files" : "")}).");
                         }
                     }
                 }
 
                 // Remove sprites whose source images have been removed:
-                var oldSpriteNames = spriteMakingSettings.FileHashesHistory
-                    .Select(kv => SpriteMakingSettings.GetSpriteName(kv.Key))
-                    .ToHashSet();
-                var newSpriteNames = spriteImagePaths
-                    .Select(group => group.Key)
-                    .ToHashSet();
-                foreach (var spriteName in oldSpriteNames)
+                if (spriteMakingHistory != null)
                 {
-                    if (!newSpriteNames.Contains(spriteName))
+                    var oldSpriteNames = spriteMakingHistory.Sprites
+                        .Select(kv => kv.Key)
+                        .ToHashSet();
+                    var newSpriteNames = spriteSourceFileGroups
+                        .Select(group => group.Key)
+                        .ToHashSet();
+
+                    foreach (var spriteName in oldSpriteNames)
                     {
-                        var spriteFilePath = Path.Combine(outputDirectory, spriteName + ".spr");
-                        try
+                        if (!newSpriteNames.Contains(spriteName))
                         {
-                            if (File.Exists(spriteFilePath))
+                            var spriteFilePath = Path.Combine(outputDirectory, spriteName + ".spr");
+                            try
                             {
-                                File.Delete(spriteFilePath);
-                                spritesRemoved += 1;
-                                logger.Log($"- Removed sprite '{spriteFilePath}'.");
+                                if (File.Exists(spriteFilePath))
+                                {
+                                    File.Delete(spriteFilePath);
+                                    spritesRemoved += 1;
+                                    logger.Log($"- Removed sprite '{spriteFilePath}'.");
+                                }
                             }
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.Log($"- WARNING: Failed to remove '{spriteFilePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                            catch (Exception ex)
+                            {
+                                logger.Log($"- WARNING: Failed to remove '{spriteFilePath}': {ex.GetType().Name}: '{ex.Message}'.");
+                            }
                         }
                     }
                 }
@@ -183,7 +200,7 @@ namespace SpriteMaker
                     (var added, var updated, var removed) = MakeSpritesFromImagesDirectory(
                         subDirectoryPath,
                         Path.Combine(outputDirectory, subDirectoryName),
-                        fullRebuild,
+                        doFullRebuild,
                         includeSubDirectories,
                         enableSubDirectoryRemoving,
                         logger);
@@ -194,10 +211,10 @@ namespace SpriteMaker
                     spritesRemoved += removed;
                 }
 
-                if (enableSubDirectoryRemoving)
+                if (enableSubDirectoryRemoving && spriteMakingHistory is not null)
                 {
                     // Remove output sprites for sub-directories that have been removed:
-                    foreach (var subDirectoryName in spriteMakingSettings.SubDirectoryNamesHistory)
+                    foreach (var subDirectoryName in spriteMakingHistory.SubDirectoryNames)
                     {
                         // Remove all sprites from the associated output directory, and the directory itself as well if it's empty:
                         if (!currentSubDirectoryNames.Contains(subDirectoryName))
@@ -206,9 +223,35 @@ namespace SpriteMaker
                 }
             }
 
-            spriteMakingSettings.UpdateHistory(currentFileHashes, currentSubDirectoryNames);
+            // Save information about this build operation, to enable future incremental updates:
+            var newHistory = new SpriteMakingHistory(successfulSpriteInputs, currentSubDirectoryNames);
+            newHistory.Save(inputDirectory);
 
             return (spritesAdded, spritesUpdated, spritesRemoved);
+        }
+
+        private static bool HasBeenModified(string spriteName, string outputSpritePath, SpriteSourceFileInfo[] spriteSourceFiles, SpriteMakingHistory? spriteMakingHistory)
+        {
+            if (spriteMakingHistory is null || !spriteMakingHistory.Sprites.TryGetValue(spriteName, out var spriteHistory))
+                return true;
+
+            if (spriteSourceFiles.Length != spriteHistory.InputFiles.Length)
+                return true;
+
+            if (!spriteHistory.OutputFile.HasMatchingFileHash(outputSpritePath))
+                return true;
+
+            foreach (var sourceFile in spriteSourceFiles)
+            {
+                var sourceFileName = Path.GetFileName(sourceFile.Path);
+                var previousSourceFile = spriteHistory.InputFiles.FirstOrDefault(file => Path.GetFileName(file.Path) == sourceFileName);
+                if (previousSourceFile is null)
+                    return true;
+
+                if (sourceFile.FileSize != previousSourceFile.FileSize || sourceFile.FileHash != previousSourceFile.FileHash || sourceFile.Settings != previousSourceFile.Settings)
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -217,91 +260,48 @@ namespace SpriteMaker
         /// then this method will skip making a sprite if it already exists and is up-to-date. It will then also update <paramref name="currentFileHashes"/>
         /// with the file hashes of the given input images.
         /// </summary>
-        static bool MakeSprite(
+        private static bool MakeSprite(
             string spriteName,
-            IEnumerable<string> imagePaths,
+            SpriteSourceFileInfo[] sourceFiles,
             string outputSpritePath,
             SpriteMakingSettings spriteMakingSettings,
             string conversionOutputDirectory,
-            bool forceRebuild,
-            Logger logger,
-            IDictionary<string, byte[]?>? currentFileHashes = null)
+            Logger logger)
         {
             try
             {
-                var imagePathsAndSettings = imagePaths
-                    .Select(path =>
-                    {
-                        var isSupportedFileType = ImageFileIO.CanLoad(path);
-                        var filenameSettings = SpriteFilenameSettings.FromFilename(path);
-                        var spriteSettings = spriteMakingSettings.GetSpriteSettings(Path.GetFileName(path));
-
-                        // Filename settings take priority over config files:
-                        if (filenameSettings.Type != null) spriteSettings.settings.SpriteType = filenameSettings.Type;
-                        if (filenameSettings.TextureFormat != null) spriteSettings.settings.SpriteTextureFormat = filenameSettings.TextureFormat;
-                        if (filenameSettings.FrameOffset != null) spriteSettings.settings.FrameOffset = filenameSettings.FrameOffset;
-
-                        return (path, isSupportedFileType, filenameSettings, spriteSettings);
-                    })
-                    .OrderBy(file => file.filenameSettings.FrameNumber)
-                    .ToArray();
-
-                if (imagePathsAndSettings.Any(file => !file.isSupportedFileType && file.spriteSettings.settings.ConverterArguments == null))
+                if (sourceFiles.Any(sourceFile => sourceFile.Settings.Converter is not null && sourceFile.Settings.ConverterArguments is null))
                 {
                     logger.Log($"WARNING: some input files for '{spriteName}' are missing converter arguments. Skipping sprite.");
                     return false;
                 }
-                else if (imagePaths.Count() > 1 && imagePathsAndSettings.Any(file => file.filenameSettings.FrameNumber == null))
+                else if (sourceFiles.Length > 1 && sourceFiles.Any(sourceFile => sourceFile.Settings.FrameNumber is null))
                 {
-                    logger.Log($"WARNING: not all input files for '{spriteName}' contain a frame number ({string.Join(", ", imagePaths)}). Skipping sprite.");
-                    return false;
+                    logger.Log($"WARNING: not all input files for '{spriteName}' contain a frame number ({string.Join(", ", sourceFiles.Select(sourceFile => sourceFile.Path))}). Skipping sprite.");
                 }
 
-                // Read file hashes - these are used to detect filename changes, and will be stored for future change detection:
-                if (currentFileHashes != null)
-                {
-                    var imageFileHashes = imagePaths.ToDictionary(path => Path.GetFileName(path)!, GetFileHash);
-                    foreach (var kv in imageFileHashes)
-                        currentFileHashes[kv.Key] = kv.Value;
 
-                    // Do we need to update this sprite?
-                    if (!forceRebuild)
-                    {
-                        var spriteFileInfo = new FileInfo(outputSpritePath);
-                        if (spriteFileInfo.Exists)
-                        {
-                            var lastSpriteUpdateTime = spriteFileInfo.LastWriteTimeUtc;
-
-                            // Have any settings been updated? Have any source images been updated? Have any frame images been swapped or has any file been renamed?
-                            if (!imagePathsAndSettings.Any(file => file.spriteSettings.lastUpdate > lastSpriteUpdateTime) &&
-                                !imagePathsAndSettings.Any(file => new FileInfo(file.path).LastWriteTimeUtc > lastSpriteUpdateTime) &&
-                                imageFileHashes.All(kv => spriteMakingSettings.FileHashesHistory.TryGetValue(kv.Key, out var oldHash) && IsEqualHash(oldHash, kv.Value)))
-                            {
-                                // No changes detected, this sprite doesn't need to be rebuilt:
-                                return false;
-                            }
-                        }
-                    }
-                }
+                var orderedSourceFiles = sourceFiles
+                    .OrderBy(sourceFile => sourceFile.Settings.FrameNumber)
+                    .ToArray();
 
                 // Start building this sprite:
                 using (var frameImages = new DisposableList<FrameImage>())
                 {
-                    foreach (var file in imagePathsAndSettings)
+                    foreach (var sourceFile in orderedSourceFiles)
                     {
                         // Do we need to convert this image?
-                        var initialImageFilePath = file.path;
-                        var imageFilePaths = new[] { initialImageFilePath };
-                        var spriteSettings = file.spriteSettings.settings;
-                        if (spriteSettings.Converter != null)
+                        var initialSourceFilePath = sourceFile.Path;
+                        var imageFilePaths = new[] { initialSourceFilePath };
+                        if (sourceFile.Settings.Converter != null)
                         {
-                            if (spriteSettings.ConverterArguments == null)
-                                throw new InvalidDataException($"Unable to convert '{file.path}': missing converter arguments.");
+                            if (sourceFile.Settings.ConverterArguments == null)
+                                throw new InvalidDataException($"Unable to convert '{sourceFile.Path}': missing converter arguments.");
 
-                            initialImageFilePath = Path.Combine(conversionOutputDirectory, Path.GetFileNameWithoutExtension(file.path));
+                            initialSourceFilePath = Path.Combine(conversionOutputDirectory, Path.GetFileNameWithoutExtension(sourceFile.Path));
                             CreateDirectory(conversionOutputDirectory);
 
-                            var outputFilePaths = ExternalConversion.ExecuteConversionCommand(spriteSettings.Converter, spriteSettings.ConverterArguments, file.path, initialImageFilePath, logger);
+                            var outputFilePaths = ExternalConversion.ExecuteConversionCommand(sourceFile.Settings.Converter, sourceFile.Settings.ConverterArguments, sourceFile.Path, initialSourceFilePath, logger);
                             if (outputFilePaths.Length < 1)
                                 throw new IOException("Unable to find converter output files. Output files must have the same name as the input file (different extensions and suffixes are ok).");
 
@@ -314,30 +314,30 @@ namespace SpriteMaker
                         foreach (var imageFilePath in imageFilePaths)
                         {
                             var image = ImageFileIO.LoadImage(imageFilePath);
-                            if (file.filenameSettings.SpritesheetTileSize is Size tileSize)
+                            if (sourceFile.Settings.SpritesheetTileSize is Size tileSize)
                             {
                                 if (tileSize.Width < 1 || tileSize.Height < 1)
-                                    throw new InvalidDataException($"Invalid tile size for image '{file.path}' ({tileSize.Width} x {tileSize.Height}): tile size must not be negative.");
+                                    throw new InvalidDataException($"Invalid tile size for image '{sourceFile.Path}' ({tileSize.Width} x {tileSize.Height}): tile size must not be negative.");
                                 if (image.Width % tileSize.Width != 0 || image.Height % tileSize.Height != 0)
-                                    throw new InvalidDataException($"Spritesheet image '{file.path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
+                                    throw new InvalidDataException($"Spritesheet image '{sourceFile.Path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
 
                                 var tileImages = GetSpritesheetTiles(image, tileSize);
                                 foreach (var tileImage in tileImages)
-                                    frameImages.Add(new FrameImage(tileImage, file.spriteSettings.settings, frameImages.Count));
+                                    frameImages.Add(new FrameImage(tileImage, sourceFile.Settings, frameImages.Count));
 
                                 image.Dispose();
                             }
                             else
                             {
-                                frameImages.Add(new FrameImage(image, file.spriteSettings.settings, file.filenameSettings.FrameNumber ?? frameImages.Count));
+                                frameImages.Add(new FrameImage(image, sourceFile.Settings, sourceFile.Settings.FrameNumber ?? frameImages.Count));
                             }
                         }
                     }
 
                     // Sprite settings:
-                    var firstFile = imagePathsAndSettings.First();
-                    var spriteType = firstFile.filenameSettings.Type ?? firstFile.spriteSettings.settings.SpriteType ?? SpriteType.Parallel;
-                    var spriteTextureFormat = firstFile.filenameSettings.TextureFormat ?? firstFile.spriteSettings.settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
+                    var firstSourceFile = orderedSourceFiles.First();
+                    var spriteType = firstSourceFile.Settings.SpriteType ?? SpriteType.Parallel;
+                    var spriteTextureFormat = firstSourceFile.Settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
 
                     var sprite = CreateSpriteFromImages(frameImages, spriteType, spriteTextureFormat);
                     sprite.Save(outputSpritePath);
@@ -352,7 +352,7 @@ namespace SpriteMaker
             }
         }
 
-        static int RemoveOutputSprites(string directory, Logger logger)
+        private static int RemoveOutputSprites(string directory, Logger logger)
         {
             if (!Directory.Exists(directory))
                 return 0;
@@ -393,7 +393,7 @@ namespace SpriteMaker
             return spritesRemoved;
         }
 
-        static Image<Rgba32>[] GetSpritesheetTiles(Image<Rgba32> spritesheet, Size tileSize)
+        private static Image<Rgba32>[] GetSpritesheetTiles(Image<Rgba32> spritesheet, Size tileSize)
         {
             // Frames are taken from left to right, then from top to bottom.
             var frameImages = new List<Image<Rgba32>>();
@@ -408,7 +408,7 @@ namespace SpriteMaker
             return frameImages.ToArray();
         }
 
-        static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, SpriteType spriteType, SpriteTextureFormat spriteTextureFormat)
+        private static Sprite CreateSpriteFromImages(IList<FrameImage> frameImages, SpriteType spriteType, SpriteTextureFormat spriteTextureFormat)
         {
             (var palette, var colorIndexMappingCache) = CreatePaletteAndColorIndexMappingCache(frameImages, spriteTextureFormat);
 
@@ -442,7 +442,7 @@ namespace SpriteMaker
             return sprite;
         }
 
-        static (Rgba32[] palette, Dictionary<Rgba32, int> colorIndexMappingCache) CreatePaletteAndColorIndexMappingCache(
+        private static (Rgba32[] palette, Dictionary<Rgba32, int> colorIndexMappingCache) CreatePaletteAndColorIndexMappingCache(
             IList<FrameImage> frameImages,
             SpriteTextureFormat spriteTextureFormat)
         {
@@ -518,7 +518,7 @@ namespace SpriteMaker
             }
         }
 
-        static Func<Rgba32, bool> MakeTransparencyPredicate(FrameImage frameImage, bool isAlphaTest)
+        private static Func<Rgba32, bool> MakeTransparencyPredicate(FrameImage frameImage, bool isAlphaTest)
         {
             var transparencyThreshold = isAlphaTest ? Math.Clamp(frameImage.Settings.AlphaTestTransparencyThreshold ?? 128, 0, 255) : 0;
             if (frameImage.Settings.AlphaTestTransparencyColor is Rgba32 transparencyColor)
@@ -527,7 +527,7 @@ namespace SpriteMaker
             return color => color.A < transparencyThreshold;
         }
 
-        static byte[] CreateFrameImageData(
+        private static byte[] CreateFrameImageData(
             ImageFrame<Rgba32> imageFrame,
             Rgba32[] palette,
             IDictionary<Rgba32, int> colorIndexMappingCache,
@@ -564,19 +564,25 @@ namespace SpriteMaker
         }
 
 
-        static void CreateDirectory(string? path)
+        /// <summary>
+        /// Returns all potential input files for the given directory.
+        /// Bookkeeping files and directories are ignored.
+        /// </summary>
+        private static IEnumerable<string> GetInputFilePaths(string inputDirectory)
+        {
+            foreach (var path in Directory.EnumerateFiles(inputDirectory))
+            {
+                if (SpriteMakingSettings.IsConfigurationFile(path) || SpriteMakingHistory.IsHistoryFile(path))
+                    continue;
+
+                yield return path;
+            }
+        }
+
+        private static void CreateDirectory(string? path)
         {
             if (!string.IsNullOrEmpty(path))
                 Directory.CreateDirectory(path);
         }
-
-        static byte[] GetFileHash(string path)
-        {
-            using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var sha256 = SHA256.Create())
-                return sha256.ComputeHash(file);
-        }
-
-        static bool IsEqualHash(byte[]? hash1, byte[]? hash2) => hash1 != null && hash2 != null && Enumerable.SequenceEqual(hash1, hash2);
     }
 }

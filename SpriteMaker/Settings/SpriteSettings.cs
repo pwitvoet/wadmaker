@@ -3,7 +3,7 @@ using Shared.Sprites;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace SpriteMaker
+namespace SpriteMaker.Settings
 {
     enum IndexAlphaTransparencySource
     {
@@ -16,7 +16,7 @@ namespace SpriteMaker
     /// The type and texture format settings apply to the sprite itself.
     /// All other settings can be applied to individual frame images.
     /// </summary>
-    struct SpriteSettings
+    class SpriteSettings : IEquatable<SpriteSettings>
     {
         /// <summary>
         /// When true, the source image(s) are ignored - as if they don't exist.
@@ -53,6 +53,17 @@ namespace SpriteMaker
         /// </summary>
         public SpriteTextureFormat? SpriteTextureFormat { get; set; }
 
+        /// <summary>
+        /// Multiple images with the same sprite name will be combined into an animated sprite.
+        /// Their frame numbers determine how they are ordered.
+        /// Frame numbers do not need to be consecutive.
+        /// </summary>
+        public int? FrameNumber { get; set; }
+
+        /// <summary>
+        /// If this is set, the image is cut up into tiles, and each tile is used as a separate frame.
+        /// </summary>
+        public Size? SpritesheetTileSize { get; set; }
 
         /// <summary>
         /// The offset of this frame relative to the center of the image.
@@ -119,5 +130,54 @@ namespace SpriteMaker
         /// current file path and the location where the converter application must save the output image.
         /// </summary>
         public string? ConverterArguments { get; set; }
+
+
+        /// <summary>
+        /// Updates the current settings with the given settings.
+        /// </summary>
+        public void OverrideWith(SpriteSettings overrideSettings)
+        {
+            if (overrideSettings.Ignore != null) Ignore = overrideSettings.Ignore;
+            if (overrideSettings.SpriteType != null) SpriteType = overrideSettings.SpriteType;
+            if (overrideSettings.SpriteTextureFormat != null) SpriteTextureFormat = overrideSettings.SpriteTextureFormat;
+            if (overrideSettings.FrameNumber != null) FrameNumber = overrideSettings.FrameNumber;
+            if (overrideSettings.SpritesheetTileSize != null) SpritesheetTileSize = overrideSettings.SpritesheetTileSize;
+            if (overrideSettings.FrameOffset != null) FrameOffset = overrideSettings.FrameOffset;
+            if (overrideSettings.DitheringAlgorithm != null) DitheringAlgorithm = overrideSettings.DitheringAlgorithm;
+            if (overrideSettings.DitherScale != null) DitherScale = overrideSettings.DitherScale;
+            if (overrideSettings.AlphaTestTransparencyThreshold != null) AlphaTestTransparencyThreshold = overrideSettings.AlphaTestTransparencyThreshold;
+            if (overrideSettings.AlphaTestTransparencyColor != null) AlphaTestTransparencyColor = overrideSettings.AlphaTestTransparencyColor;
+            if (overrideSettings.IndexAlphaTransparencySource != null) IndexAlphaTransparencySource = overrideSettings.IndexAlphaTransparencySource;
+            if (overrideSettings.IndexAlphaColor != null) IndexAlphaColor = overrideSettings.IndexAlphaColor;
+            if (overrideSettings.Converter != null) Converter = overrideSettings.Converter;
+            if (overrideSettings.ConverterArguments != null) ConverterArguments = overrideSettings.ConverterArguments;
+        }
+
+
+        public bool Equals(SpriteSettings? other)
+        {
+            return other is not null &&
+                Ignore == other.Ignore &&
+                SpriteType == other.SpriteType &&
+                SpriteTextureFormat == other.SpriteTextureFormat &&
+                FrameNumber == other.FrameNumber &&
+                SpritesheetTileSize == other.SpritesheetTileSize &&
+                FrameOffset == other.FrameOffset &&
+                DitheringAlgorithm == other.DitheringAlgorithm &&
+                DitherScale == other.DitherScale &&
+                AlphaTestTransparencyThreshold == other.AlphaTestTransparencyThreshold &&
+                AlphaTestTransparencyColor == other.AlphaTestTransparencyColor &&
+                IndexAlphaTransparencySource == other.IndexAlphaTransparencySource &&
+                IndexAlphaColor == other.IndexAlphaColor &&
+                Converter == other.Converter &&
+                ConverterArguments == other.ConverterArguments;
+        }
+
+        public override bool Equals(object? obj) => obj is SpriteSettings other && Equals(other);
+
+        public override int GetHashCode() => 0; // Just do an equality check.
+
+        public static bool operator ==(SpriteSettings? left, SpriteSettings? right) => left?.Equals(right) ?? right is null;
+        public static bool operator !=(SpriteSettings? left, SpriteSettings? right) => !(left?.Equals(right) ?? right is null);
     }
 }
