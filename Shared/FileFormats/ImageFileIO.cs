@@ -24,7 +24,7 @@ namespace Shared.FileFormats
                 new PsdReader(),
             };
 
-            _extensionReaderMapping = new Dictionary<string, IImageReader>();
+            _extensionReaderMapping = new Dictionary<string, IImageReader>(StringComparer.InvariantCultureIgnoreCase);
             foreach (var reader in _imageReaders)
                 foreach (var extension in reader.SupportedExtensions)
                     _extensionReaderMapping[extension] = reader;
