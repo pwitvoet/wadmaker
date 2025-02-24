@@ -166,8 +166,10 @@ namespace SpriteMaker
                 var filenameSettings = new SpriteSettings {
                     SpriteType = sprite.Type,
                     SpriteTextureFormat = sprite.TextureFormat,
-                    FrameNumber = i,
                 };
+
+                if (sprite.Frames.Count > 1)
+                    filenameSettings.FrameNumber = i;
 
                 var offset = new Point(spriteFrame.FrameOriginX + ((int)spriteFrame.FrameWidth / 2), spriteFrame.FrameOriginY - ((int)spriteFrame.FrameHeight / 2));
                 if (offset.X != 0 || offset.Y != 0)
