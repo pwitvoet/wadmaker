@@ -74,6 +74,14 @@ namespace SpriteMaker.Settings
 
 
         /// <summary>
+        /// When true, and if the source image is in an indexed format,
+        /// the source image's palette and image data are used directly,
+        /// without quantization, dithering or other type-specific processing.
+        /// </summary>
+        public bool? PreservePalette { get; set; }
+
+
+        /// <summary>
         /// The dithering algorithm to apply when converting a source image to an 8-bit indexed sprite.
         /// Defaults to <see cref="DitheringAlgorithm.FloydSteinberg"/> for normal sprites,
         /// and to <see cref="DitheringAlgorithm.None"/> for animated sprites (to prevent 'flickering' animations).
@@ -132,6 +140,15 @@ namespace SpriteMaker.Settings
         public string? ConverterArguments { get; set; }
 
 
+        public SpriteSettings()
+        {
+        }
+
+        public SpriteSettings(SpriteSettings settings)
+        {
+            OverrideWith(settings);
+        }
+
         /// <summary>
         /// Updates the current settings with the given settings.
         /// </summary>
@@ -143,6 +160,7 @@ namespace SpriteMaker.Settings
             if (overrideSettings.FrameNumber != null) FrameNumber = overrideSettings.FrameNumber;
             if (overrideSettings.SpritesheetTileSize != null) SpritesheetTileSize = overrideSettings.SpritesheetTileSize;
             if (overrideSettings.FrameOffset != null) FrameOffset = overrideSettings.FrameOffset;
+            if (overrideSettings.PreservePalette != null) PreservePalette = overrideSettings.PreservePalette;
             if (overrideSettings.DitheringAlgorithm != null) DitheringAlgorithm = overrideSettings.DitheringAlgorithm;
             if (overrideSettings.DitherScale != null) DitherScale = overrideSettings.DitherScale;
             if (overrideSettings.AlphaTestTransparencyThreshold != null) AlphaTestTransparencyThreshold = overrideSettings.AlphaTestTransparencyThreshold;
@@ -163,6 +181,7 @@ namespace SpriteMaker.Settings
                 FrameNumber == other.FrameNumber &&
                 SpritesheetTileSize == other.SpritesheetTileSize &&
                 FrameOffset == other.FrameOffset &&
+                PreservePalette == other.PreservePalette &&
                 DitheringAlgorithm == other.DitheringAlgorithm &&
                 DitherScale == other.DitherScale &&
                 AlphaTestTransparencyThreshold == other.AlphaTestTransparencyThreshold &&

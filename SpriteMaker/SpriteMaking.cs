@@ -5,9 +5,10 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using SpriteMaker.Settings;
 using FileInfo = Shared.FileSystem.FileInfo;
+using Shared.FileSystem;
+using Shared.FileFormats.Indexed;
 
 namespace SpriteMaker
 {
@@ -275,62 +276,83 @@ namespace SpriteMaker
                     logger.Log($"WARNING: some input files for '{spriteName}' are missing converter arguments. Skipping sprite.");
                     return false;
                 }
-                else if (sourceFiles.Length > 1 && sourceFiles.Any(sourceFile => sourceFile.Settings.FrameNumber is null))
+
+                // First gather all input files, converting any if necessary:
+                var convertedSourceFiles = new List<SpriteSourceFileInfo>();
+                for (int i = 0; i < sourceFiles.Length; i++)
                 {
-                    logger.Log($"WARNING: not all input files for '{spriteName}' contain a frame number ({string.Join(", ", sourceFiles.Select(sourceFile => sourceFile.Path))}). Skipping sprite.");
+                    var sourceFile = sourceFiles[i];
+                    if (sourceFile.Settings.Converter is null)
+                    {
+                        convertedSourceFiles.Add(sourceFile);
+                    }
+                    else
+                    {
+                        if (sourceFile.Settings.ConverterArguments is null)
+                            throw new InvalidUsageException($"Unable to convert '{sourceFile.Path}': missing converter arguments.");
+
+                        var conversionOutputPath = Path.Combine(conversionOutputDirectory, spriteName);
+                        CreateDirectory(conversionOutputDirectory);
+
+                        var outputFilePaths = ExternalConversion.ExecuteConversionCommand(sourceFile.Settings.Converter, sourceFile.Settings.ConverterArguments, sourceFile.Path, conversionOutputPath, logger);
+                        if (outputFilePaths.Length < 1)
+                            throw new IOException("Unable to find converter output file. An output file must have the same name as the input file (different extensions are ok).");
+
+                        var supportedOutputFilePaths = outputFilePaths.Where(ImageFileIO.CanLoad).ToArray();
+                        if (supportedOutputFilePaths.Length < 1)
+                            throw new IOException("The converter did not produce a supported file type.");
+
+                        foreach (var supportedOutputFilePath in supportedOutputFilePaths)
+                        {
+                            var settings = new SpriteSettings(sourceFile.Settings);
+                            settings.OverrideWith(SpriteMakingSettings.GetSpriteSettingsFromFilename(supportedOutputFilePath));
+                            convertedSourceFiles.Add(new SpriteSourceFileInfo(supportedOutputFilePath, 0, new FileHash(), DateTimeOffset.UtcNow, settings));
+                        }
+                    }
                 }
 
+                if (convertedSourceFiles.Count > 1 && convertedSourceFiles.Any(sourceFile => sourceFile.Settings.FrameNumber is null))
+                {
+                    logger.Log($"WARNING: not all input files for '{spriteName}' contain a frame number ({string.Join(", ", convertedSourceFiles.Select(sourceFile => sourceFile.Path))}). Skipping sprite.");
+                    return false;
+                }
 
-                var orderedSourceFiles = sourceFiles
+                // Order by frame number:
+                var orderedSourceFiles = convertedSourceFiles
                     .OrderBy(sourceFile => sourceFile.Settings.FrameNumber)
                     .ToArray();
+
+                // Do we need to preserve the source image's palette?
+                if (orderedSourceFiles[0].Settings.PreservePalette == true && orderedSourceFiles.All(sourceFile => ImageFileIO.IsIndexed(sourceFile.Path)))
+                {
+                    var sprite = CreateSpriteFromIndexedSourceFiles(spriteName, orderedSourceFiles, logger);
+                    sprite.Save(outputSpritePath);
+                    return true;
+                }
+
 
                 // Start building this sprite:
                 using (var frameImages = new DisposableList<FrameImage>())
                 {
                     foreach (var sourceFile in orderedSourceFiles)
                     {
-                        // Do we need to convert this image?
-                        var initialSourceFilePath = sourceFile.Path;
-                        var imageFilePaths = new[] { initialSourceFilePath };
-                        if (sourceFile.Settings.Converter != null)
+                        var image = ImageFileIO.LoadImage(sourceFile.Path /*imageFilePath*/);
+                        if (sourceFile.Settings.SpritesheetTileSize is Size tileSize)
                         {
-                            if (sourceFile.Settings.ConverterArguments == null)
-                                throw new InvalidDataException($"Unable to convert '{sourceFile.Path}': missing converter arguments.");
+                            if (tileSize.Width < 1 || tileSize.Height < 1)
+                                throw new InvalidDataException($"Invalid tile size for image '{sourceFile.Path}' ({tileSize.Width} x {tileSize.Height}): tile size must not be negative.");
+                            if (image.Width % tileSize.Width != 0 || image.Height % tileSize.Height != 0)
+                                throw new InvalidDataException($"Spritesheet image '{sourceFile.Path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
 
-                            initialSourceFilePath = Path.Combine(conversionOutputDirectory, Path.GetFileNameWithoutExtension(sourceFile.Path));
-                            CreateDirectory(conversionOutputDirectory);
+                            var tileImages = GetSpritesheetTiles(image, tileSize);
+                            foreach (var tileImage in tileImages)
+                                frameImages.Add(new FrameImage(tileImage, sourceFile.Settings, frameImages.Count));
 
-                            var outputFilePaths = ExternalConversion.ExecuteConversionCommand(sourceFile.Settings.Converter, sourceFile.Settings.ConverterArguments, sourceFile.Path, initialSourceFilePath, logger);
-                            if (outputFilePaths.Length < 1)
-                                throw new IOException("Unable to find converter output files. Output files must have the same name as the input file (different extensions and suffixes are ok).");
-
-                            imageFilePaths = outputFilePaths.Where(ImageFileIO.CanLoad).ToArray();
-                            if (imageFilePaths.Length < 1)
-                                throw new IOException("The converter did not produce any supported file types.");
+                            image.Dispose();
                         }
-
-                        // Load images (and cut up spritesheets into separate frame images):
-                        foreach (var imageFilePath in imageFilePaths)
+                        else
                         {
-                            var image = ImageFileIO.LoadImage(imageFilePath);
-                            if (sourceFile.Settings.SpritesheetTileSize is Size tileSize)
-                            {
-                                if (tileSize.Width < 1 || tileSize.Height < 1)
-                                    throw new InvalidDataException($"Invalid tile size for image '{sourceFile.Path}' ({tileSize.Width} x {tileSize.Height}): tile size must not be negative.");
-                                if (image.Width % tileSize.Width != 0 || image.Height % tileSize.Height != 0)
-                                    throw new InvalidDataException($"Spritesheet image '{sourceFile.Path}' size ({image.Width} x {image.Height}) is not a multiple of the specified tile size ({tileSize.Width} x {tileSize.Height}).");
-
-                                var tileImages = GetSpritesheetTiles(image, tileSize);
-                                foreach (var tileImage in tileImages)
-                                    frameImages.Add(new FrameImage(tileImage, sourceFile.Settings, frameImages.Count));
-
-                                image.Dispose();
-                            }
-                            else
-                            {
-                                frameImages.Add(new FrameImage(image, sourceFile.Settings, sourceFile.Settings.FrameNumber ?? frameImages.Count));
-                            }
+                            frameImages.Add(new FrameImage(image, sourceFile.Settings, sourceFile.Settings.FrameNumber ?? frameImages.Count));
                         }
                     }
 
@@ -349,6 +371,68 @@ namespace SpriteMaker
             {
                 logger.Log($"ERROR: Failed to build '{spriteName}': {ex.GetType().Name}: '{ex.Message}'.");
                 return false;
+            }
+        }
+
+        private static Sprite CreateSpriteFromIndexedSourceFiles(string spriteName, SpriteSourceFileInfo[] sourceFiles, Logger logger)
+        {
+            var indexedFrameImages = sourceFiles
+                .Select(sourceFile => ImageFileIO.LoadIndexedImage(sourceFile.Path))
+                .Select((indexedImage, i) => GetIndexedFrameImages(indexedImage, sourceFiles[i].Settings))
+                .ToArray();
+            var palette = indexedFrameImages.First()[0].Palette;
+
+            var firstSourceFile = sourceFiles.First();
+            var spriteType = firstSourceFile.Settings.SpriteType ?? SpriteType.Parallel;
+            var spriteTextureFormat = firstSourceFile.Settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
+
+            var spriteWidth = indexedFrameImages.Max(frameImages => frameImages.Max(frameImage => frameImage.Width));
+            var spriteHeight = indexedFrameImages.Max(frameImages => frameImages.Max(frameImage => frameImage.Height));
+            var isAnimatedSprite = indexedFrameImages.Sum(frameImages => frameImages.Count()) > 1;
+
+            var sprite = Sprite.CreateSprite(spriteType, spriteTextureFormat, spriteWidth, spriteHeight, palette);
+            for (int i = 0; i < sourceFiles.Length; i++)
+            {
+                var sourceFile = sourceFiles[i];
+                var frameImages = indexedFrameImages[i];
+
+                foreach (var frameImage in frameImages)
+                {
+                    sprite.Frames.Add(new Frame(
+                        FrameType.Single,
+                        -(frameImage.Width / 2) + (sourceFile.Settings.FrameOffset?.X ?? 0),
+                        (frameImage.Height / 2) + (sourceFile.Settings.FrameOffset?.Y ?? 0),
+                        (uint)frameImage.Width,
+                        (uint)frameImage.Height,
+                        frameImage.ImageData));
+                }
+            }
+            return sprite;
+
+
+            IndexedImage[] GetIndexedFrameImages(IndexedImage indexedImage, SpriteSettings settings)
+            {
+                if (settings.SpritesheetTileSize is null)
+                    return new[] { indexedImage };
+                else
+                    return GetIndexedSpritesheetTiles(indexedImage, settings.SpritesheetTileSize.Value);
+            }
+
+            IndexedImage[] GetIndexedSpritesheetTiles(IndexedImage spritesheet, Size tileSize)
+            {
+                // Frames are taken from left to right, then from top to bottom.
+                var frameImages = new List<IndexedImage>();
+                for (int y = 0; y + tileSize.Height <= spritesheet.Height; y += tileSize.Height)
+                {
+                    for (int x = 0; x + tileSize.Width <= spritesheet.Width; x += tileSize.Width)
+                    {
+                        var frameImage = new IndexedImage(tileSize.Width, tileSize.Height, spritesheet.Palette);
+                        for (int row = 0; row < tileSize.Height; row++)
+                            Array.Copy(spritesheet.ImageData, (y + row) * spritesheet.Width + x, frameImage.ImageData, row * tileSize.Width, tileSize.Width);
+                        frameImages.Add(frameImage);
+                    }
+                }
+                return frameImages.ToArray();
             }
         }
 

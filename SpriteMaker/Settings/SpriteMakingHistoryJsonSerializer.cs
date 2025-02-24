@@ -212,6 +212,7 @@ namespace SpriteMaker.Settings
             if (settings.FrameNumber != null) writer.WriteNumber("frame-number", settings.FrameNumber.Value);
             if (settings.SpritesheetTileSize != null) writer.WriteString("spritesheet-tile-size", Serialization.ToString(settings.SpritesheetTileSize.Value));
             if (settings.FrameOffset != null) writer.WriteString("frame-offset", Serialization.ToString(settings.FrameOffset.Value));
+            if (settings.PreservePalette != null) writer.WriteBoolean("preserve-palette", settings.PreservePalette.Value);
             if (settings.DitheringAlgorithm != null) writer.WriteString("dithering-algorithm", Serialization.ToString(settings.DitheringAlgorithm.Value));
             if (settings.DitherScale != null) writer.WriteNumber("dither-scale", settings.DitherScale.Value);
             if (settings.AlphaTestTransparencyThreshold != null) writer.WriteNumber("alpha-test-transparency-threshold", settings.AlphaTestTransparencyThreshold.Value);
@@ -240,6 +241,7 @@ namespace SpriteMaker.Settings
                     case "frame-number": settings.FrameNumber = (int)reader.ReadInt64(); break;
                     case "spritesheet-tile-size": settings.SpritesheetTileSize = Serialization.ReadSize(reader.ReadString()); break;
                     case "frame-offset": settings.FrameOffset = Serialization.ReadPoint(reader.ReadString()); break;
+                    case "preserve-palette": settings.PreservePalette = reader.ReadBoolean(); break;
                     case "dithering-algorithm": settings.DitheringAlgorithm = Serialization.ReadDitheringAlgorithm(reader.ReadString()); break;
                     case "dither-scale": settings.DitherScale = reader.ReadFloat(); break;
                     case "alpha-test-transparency-threshold": settings.AlphaTestTransparencyThreshold = (int)reader.ReadInt64(); break;

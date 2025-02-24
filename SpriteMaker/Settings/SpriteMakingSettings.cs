@@ -337,6 +337,7 @@ namespace SpriteMaker.Settings
         const string SpriteTypeKey = "type";
         const string SpriteTextureFormatKey = "texture-format";
         const string FrameOffsetKey = "frame-offset";
+        const string PreservePaletteKey = "preserve-palette";
         const string DitheringAlgorithmKey = "dithering";
         const string DitherScaleKey = "dither-scale";
         const string AlphaTestTransparencyThresholdKey = "transparency-threshold";
@@ -378,6 +379,11 @@ namespace SpriteMaker.Settings
                     case FrameOffsetKey:
                         RequireToken(":");
                         spriteSettings.FrameOffset = new Point(ParseToken(int.Parse), ParseToken(int.Parse));
+                        break;
+
+                    case PreservePaletteKey:
+                        RequireToken(":");
+                        spriteSettings.PreservePalette = ParseToken(bool.Parse);
                         break;
 
                     case DitheringAlgorithmKey:
