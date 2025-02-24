@@ -81,8 +81,10 @@ namespace SpriteMaker
                 {
                     if (File.Exists(settings.InputPath))
                         SpriteMaking.MakeSingleSprite(settings.InputPath, settings.OutputPath, logger);
-                    else
+                    else if (Directory.Exists(settings.InputPath))
                         SpriteMaking.MakeSprites(settings.InputPath, settings.OutputPath, settings.FullRebuild, settings.IncludeSubDirectories, settings.EnableSubDirectoryRemoval, logger);
+                    else
+                        Log($"ERROR: Can't make sprites, input '{settings.InputPath}' does not exist!");
                 }
             }
             catch (InvalidUsageException ex)
