@@ -219,6 +219,7 @@ namespace SpriteMaker.Settings
             if (settings.AlphaTestTransparencyColor != null) writer.WriteString("alpha-test-transparency-color", Serialization.ToString(settings.AlphaTestTransparencyColor.Value));
             if (settings.IndexAlphaTransparencySource != null) writer.WriteString("index-alpha-transparency-source", Serialization.ToString(settings.IndexAlphaTransparencySource.Value));
             if (settings.IndexAlphaColor != null) writer.WriteString("index-alpha-color", Serialization.ToString(settings.IndexAlphaColor.Value));
+            if (settings.DuplicateLastFrame != null) writer.WriteBoolean("duplicate-last-frame", settings.DuplicateLastFrame.Value);
             if (settings.Converter != null) writer.WriteString("converter", settings.Converter);
             if (settings.ConverterArguments != null) writer.WriteString("converter-arguments", settings.ConverterArguments);
 
@@ -248,6 +249,7 @@ namespace SpriteMaker.Settings
                     case "alpha-test-transparency-color": settings.AlphaTestTransparencyColor = Serialization.ReadRgba32(reader.ReadString()); break;
                     case "index-alpha-transparency-source": settings.IndexAlphaTransparencySource = Serialization.ReadIndexAlphaTransparencySource(reader.ReadString()); break;
                     case "index-alpha-color": settings.IndexAlphaColor = Serialization.ReadRgba32(reader.ReadString()); break;
+                    case "duplicate-last-frame": settings.DuplicateLastFrame = reader.ReadBoolean(); break;
                     case "converter": settings.Converter = reader.ReadString(); break;
                     case "converter-arguments": settings.ConverterArguments = reader.ReadString(); break;
                 }

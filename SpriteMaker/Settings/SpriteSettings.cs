@@ -127,6 +127,13 @@ namespace SpriteMaker.Settings
 
 
         /// <summary>
+        /// When true, sprites with more than one frame will have their last frame duplicated.
+        /// This is a workaround for a bug in Half-Life that causes the last frame from an animated sprite to be skipped.
+        /// </summary>
+        public bool? DuplicateLastFrame { get; set; }
+
+
+        /// <summary>
         /// The command-line application that SpriteMaker will call to convert the current file.
         /// This also requires <see cref="ConverterArguments"/> to be set.
         /// SpriteMaker will use the output image to create a sprite. The output image will be removed afterwards.
@@ -167,6 +174,7 @@ namespace SpriteMaker.Settings
             if (overrideSettings.AlphaTestTransparencyColor != null) AlphaTestTransparencyColor = overrideSettings.AlphaTestTransparencyColor;
             if (overrideSettings.IndexAlphaTransparencySource != null) IndexAlphaTransparencySource = overrideSettings.IndexAlphaTransparencySource;
             if (overrideSettings.IndexAlphaColor != null) IndexAlphaColor = overrideSettings.IndexAlphaColor;
+            if (overrideSettings.DuplicateLastFrame != null) DuplicateLastFrame = overrideSettings.DuplicateLastFrame;
             if (overrideSettings.Converter != null) Converter = overrideSettings.Converter;
             if (overrideSettings.ConverterArguments != null) ConverterArguments = overrideSettings.ConverterArguments;
         }
@@ -188,6 +196,7 @@ namespace SpriteMaker.Settings
                 AlphaTestTransparencyColor == other.AlphaTestTransparencyColor &&
                 IndexAlphaTransparencySource == other.IndexAlphaTransparencySource &&
                 IndexAlphaColor == other.IndexAlphaColor &&
+                DuplicateLastFrame == other.DuplicateLastFrame &&
                 Converter == other.Converter &&
                 ConverterArguments == other.ConverterArguments;
         }

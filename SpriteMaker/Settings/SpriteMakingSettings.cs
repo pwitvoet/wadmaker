@@ -344,6 +344,7 @@ namespace SpriteMaker.Settings
         const string AlphaTestTransparencyColorKey = "transparency-color";
         const string IndexAlphaTransparencySourceKey = "transparency-input";
         const string IndexAlphaColorKey = "color";
+        const string DuplicateLastFrame = "duplicate-last-frame";
         const string ConverterKey = "converter";
         const string ConverterArgumentsKey = "arguments";
         const string IgnoreKey = "ignore";
@@ -414,6 +415,11 @@ namespace SpriteMaker.Settings
                     case IndexAlphaColorKey:
                         RequireToken(":");
                         spriteSettings.IndexAlphaColor = new Rgba32(ParseToken(byte.Parse), ParseToken(byte.Parse), ParseToken(byte.Parse));
+                        break;
+
+                    case DuplicateLastFrame:
+                        RequireToken(":");
+                        spriteSettings.DuplicateLastFrame = ParseToken(bool.Parse);
                         break;
 
                     case ConverterKey:

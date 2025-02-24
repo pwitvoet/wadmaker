@@ -326,6 +326,10 @@ namespace SpriteMaker
                 if (orderedSourceFiles[0].Settings.PreservePalette == true && orderedSourceFiles.All(sourceFile => ImageFileIO.IsIndexed(sourceFile.Path)))
                 {
                     var sprite = CreateSpriteFromIndexedSourceFiles(spriteName, orderedSourceFiles, logger);
+
+                    if (orderedSourceFiles[0].Settings.DuplicateLastFrame == true && sprite.Frames.Count > 0)
+                        sprite.Frames.Add(sprite.Frames.Last());
+
                     sprite.Save(outputSpritePath);
                     return true;
                 }
@@ -362,6 +366,10 @@ namespace SpriteMaker
                     var spriteTextureFormat = firstSourceFile.Settings.SpriteTextureFormat ?? SpriteTextureFormat.Additive;
 
                     var sprite = CreateSpriteFromImages(frameImages, spriteType, spriteTextureFormat);
+
+                    if (firstSourceFile.Settings.DuplicateLastFrame == true && sprite.Frames.Count > 1)
+                        sprite.Frames.Add(sprite.Frames.Last());
+
                     sprite.Save(outputSpritePath);
 
                     return true;
@@ -532,21 +540,21 @@ namespace SpriteMaker
         {
             if (spriteTextureFormat == SpriteTextureFormat.IndexAlpha)
             {
-                Rgba32 decalColor;
+                Rgba32 spriteColor;
                 if (frameImages.First().Settings.IndexAlphaColor is Rgba32 indexAlphaColor)
                 {
-                    decalColor = indexAlphaColor;
+                    spriteColor = indexAlphaColor;
                 }
                 else
                 {
                     var colorHistogram = ColorQuantization.GetColorHistogram(
                         frameImages.SelectMany(frameImage => frameImage.Image.Frames.OfType<ImageFrame<Rgba32>>()),
                         color => color.A == 0);
-                    decalColor = ColorQuantization.GetAverageColor(colorHistogram);
+                    spriteColor = ColorQuantization.GetAverageColor(colorHistogram);
                 }
                 var palette = Enumerable.Range(0, 255)
                     .Select(i => new Rgba32((byte)i, (byte)i, (byte)i))
-                    .Append(decalColor)
+                    .Append(spriteColor)
                     .ToArray();
 
                 // NOTE: No need to map colors to palette indexes, because the index can easily be derived from the color itself
