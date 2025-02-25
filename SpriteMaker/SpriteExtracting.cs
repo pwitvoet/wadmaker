@@ -322,18 +322,11 @@ namespace SpriteMaker
                         sprite.Palette);
                 }
 
-                image.Metadata.GetFormatMetadata(GifFormat.Instance).RepeatCount = 0;
-                image.Save(gifOutputPath, new GifEncoder
-                {
-                    ColorTableMode = GifColorTableMode.Global,
-                    PixelSamplingStrategy = new ExtensivePixelSamplingStrategy(),
-                    // TODO: This quantizer lops off the lowest 3 bits of each channel, so colors that are close together will be lumped together!
-                    Quantizer = new PaletteQuantizer(new ReadOnlyMemory<Color>(sprite.Palette.Select(rgba32 => new Color(rgba32)).ToArray()), new QuantizerOptions
-                    {
-                        MaxColors = 256,
-                        Dither = null
-                    }),
-                });
+                var gifMetadata = image.Metadata.GetGifMetadata();
+                gifMetadata.ColorTableMode = GifColorTableMode.Local;
+                gifMetadata.RepeatCount = 0;
+
+                image.SaveAsGif(gifOutputPath);
             }
 
             return true;
