@@ -285,7 +285,6 @@ namespace SpriteMaker
             var filenameSettings = new SpriteSettings {
                 SpriteType = sprite.Type,
                 SpriteTextureFormat = sprite.TextureFormat,
-                SpritesheetTileSize = new Size((int)sprite.MaximumWidth, (int)sprite.MaximumHeight),
             };
 
             var gifOutputPath = SpriteMakingSettings.InsertSpriteSettingsIntoFilename(Path.ChangeExtension(outputPath, ".gif"), filenameSettings);
