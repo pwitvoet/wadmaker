@@ -20,19 +20,21 @@ namespace WadMaker.Settings
 
         class Rule
         {
+            public int Order { get; }
             public string NamePattern { get; }
-            public TextureSettings? TextureSettings { get; }
+            public TextureSettings TextureSettings { get; }
 
-            public Rule(string namePattern, TextureSettings? textureSettings)
+            public Rule(int order, string namePattern, TextureSettings textureSettings)
             {
+                Order = order;
                 NamePattern = namePattern;
                 TextureSettings = textureSettings;
             }
         }
 
 
-        private Dictionary<string, Rule> _exactRules = new Dictionary<string, Rule>();
-        private List<(Regex, Rule)> _wildcardRules = new List<(Regex, Rule)>();
+        private Dictionary<string, Rule[]> _exactRules = new();
+        private List<(Regex, Rule[])> _wildcardRules = new();
 
 
         /// <summary>
@@ -43,13 +45,10 @@ namespace WadMaker.Settings
         {
             var fileHash = FileHash.FromFile(path, out var fileSize);
 
+            // Later rules override settings defined by earlier rules:
             var textureSettings = new TextureSettings();
             foreach (var rule in GetMatchingRules(Path.GetFileName(path)))
-            {
-                // More specific rules override settings defined by less specific rules:
-                if (rule.TextureSettings is TextureSettings ruleSettings)
-                    textureSettings.OverrideWith(ruleSettings);
-            }
+                textureSettings.OverrideWith(rule.TextureSettings);
 
             // Filename settings take priority over config file settings:
             var filenameSettings = GetTextureSettingsFromFilename(path);
@@ -75,35 +74,35 @@ namespace WadMaker.Settings
         }
 
 
-        // Returns all rules that match the given filename, from least to most specific.
+        // Returns all rules that match the given filename, based on order of appearance:
         private IEnumerable<Rule> GetMatchingRules(string filename)
         {
             filename = filename.ToLowerInvariant();
             var textureName = GetTextureName(filename);
 
-            foreach ((var regex, var wildcardRule) in _wildcardRules)
+            var matchingRules = new List<Rule>();
+            foreach ((var regex, var wildcardRules) in _wildcardRules)
+            {
                 if (regex.IsMatch(filename))
-                    yield return wildcardRule;
+                    matchingRules.AddRange(wildcardRules);
+            }
 
-            if (_exactRules.TryGetValue(filename, out var rule) || _exactRules.TryGetValue(textureName, out rule))
-                yield return rule;
+            if (_exactRules.TryGetValue(filename, out var ruleList) || _exactRules.TryGetValue(textureName, out ruleList))
+                matchingRules.AddRange(ruleList);
+
+            return matchingRules.OrderBy(rule => rule.Order);
         }
 
 
         private WadMakingSettings(IEnumerable<Rule> rules)
         {
-            foreach (var rule in rules)
+            foreach (var group in rules.GroupBy(rule => rule.NamePattern))
             {
-                if (rule.NamePattern.Contains("*"))
-                    _wildcardRules.Add((MakeNamePatternRegex(rule.NamePattern), rule));
+                if (group.Key.Contains('*'))
+                    _wildcardRules.Add((MakeNamePatternRegex(group.Key), group.ToArray()));
                 else
-                    _exactRules[rule.NamePattern] = rule;
+                    _exactRules[group.Key] = group.ToArray();
             }
-
-            // We'll treat longer patterns (excluding wildcard characters) as more specific, and give them priority:
-            _wildcardRules = _wildcardRules
-                .OrderBy(regexRule => regexRule.Item2.NamePattern.Count(c => c != '*'))
-                .ToList();
         }
 
         private static Regex MakeNamePatternRegex(string namePattern)
@@ -128,33 +127,30 @@ namespace WadMaker.Settings
         {
             // First read the global rules (wadmaker.config in WadMaker.exe's directory):
             var globalConfigFilePath = Path.Combine(AppContext.BaseDirectory, ConfigFilename);
-            var rules = new Dictionary<string, Rule>();
+            var rules = new List<Rule>();
             if (File.Exists(globalConfigFilePath))
             {
                 foreach (var line in File.ReadAllLines(globalConfigFilePath))
-                {
-                    var rule = ParseRuleLine(line);
-                    if (rule != null)
-                        rules[rule.NamePattern] = rule;
-                }
+                    AddRule(ParseRuleLine(line, rules.Count));
             }
 
             // Then read the specified directory's current rules (wadmaker.config):
             var configFilePath = Path.Combine(folder, ConfigFilename);
             if (File.Exists(configFilePath))
             {
+                // NOTE: Local rules take precedence over global ones.
                 foreach (var line in File.ReadAllLines(configFilePath))
-                {
-                    // TODO: It's probably better to overlay local rules onto global rules, instead of fully replacing global rules!
-
-                    // NOTE: Local rules take precedence over global ones.
-                    var rule = ParseRuleLine(line);
-                    if (rule != null)
-                        rules[rule.NamePattern] = rule;
-                }
+                    AddRule(ParseRuleLine(line, rules.Count));
             }
 
-            return new WadMakingSettings(rules.Values);
+            return new WadMakingSettings(rules);
+
+
+            void AddRule(Rule? rule)
+            {
+                if (rule is not null)
+                    rules.Add(rule);
+            }
         }
 
         public static bool IsConfigurationFile(string path) => Path.GetFileName(path) == ConfigFilename;
@@ -263,7 +259,7 @@ namespace WadMaker.Settings
         const string ConverterArgumentsKey = "arguments";
 
 
-        private static Rule? ParseRuleLine(string line)
+        private static Rule? ParseRuleLine(string line, int order)
         {
             var tokens = GetTokens(line).ToArray();
             if (tokens.Length == 0 || IsComment(tokens[0]))
@@ -355,7 +351,7 @@ namespace WadMaker.Settings
                         throw new InvalidDataException($"Unknown setting: '{token}'.");
                 }
             }
-            return new Rule(namePattern, textureSettings);
+            return new Rule(order, namePattern, textureSettings);
 
 
             void RequireToken(string value)
