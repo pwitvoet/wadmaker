@@ -20,7 +20,7 @@ WadMaker and SpriteMaker are command-line tools for creating Half-Life wad and s
 
 ## Getting started
 
-Start by downloading the latest version here: [WadMaker_1.2.1_win64.zip](https://github.com/pwitvoet/wadmaker/releases/download/1.2.1/WadMaker_1.2.1_win64.zip) (or go to the [latest release page](https://github.com/pwitvoet/wadmaker/releases/latest) if you're using Linux or a 32-bit Windows).
+Start by downloading the latest version here: [WadMaker_1.3_win64.zip](https://github.com/pwitvoet/wadmaker/releases/download/1.3/WadMaker_1.3_win64.zip) (or go to the [latest release page](https://github.com/pwitvoet/wadmaker/releases/latest) if you're using Linux or a 32-bit Windows).
 
 Extract the WadMaker zip file somewhere on your computer, then drag a directory full of images onto WadMaker.exe or SpriteMaker.exe to create a wad file or a directory full of sprites. Or, if you want to automatically save the wad or sprite files in the right location, create a batch file that calls the right tool with two arguments: first the input directory and then the output location. The download package contains example batch files to get you started.
 

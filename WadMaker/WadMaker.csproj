@@ -6,15 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <StartupObject>WadMaker.Program</StartupObject>
-    <AssemblyVersion>1.2.1</AssemblyVersion>
-    <FileVersion>1.2.1</FileVersion>
-    <Version>1.2.1</Version>
+    <AssemblyVersion>1.3</AssemblyVersion>
+    <FileVersion>1.3</FileVersion>
+    <Version>1.3</Version>
     <Title>WadMaker</Title>
     <Authors>Pieter Witvoet</Authors>
     <Company></Company>
     <Product>WadMaker</Product>
     <Description>A command-line tool that can turn directories that contain images into Half-Life wad files.</Description>
     <Copyright>Copyright © Pieter Witvoet 2021</Copyright>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
