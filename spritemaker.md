@@ -45,7 +45,8 @@ The behavior of SpriteMaker can be modified with several command-line options. T
 - **-extract** - Switches to extraction mode. This enables the extraction of directories full of sprites.
 - **-spritesheet** - Animated sprites will be extracted as spritesheet images, instead of a sequence of images.
 - **-overwrite** - Enables overwriting of existing image files when extracting sprites to images.
-- **-gif** - Sprites will be extracted as gif files, instead of a sequence of images.
+- **-format: \<fmt\>** - Extracted images output format (\<fmt\> must be `png`, `jpg`, `gif`, `bmp` or `tga`). If the output format is `gif`, animated sprites will be extracted to animated gif files.
+- **-indexed** - Extract textures as 8-bit indexed images (only works with png and bmp).
 - **-nologfile** - Prevents SpriteMaker from creating log files.
 
 It is also possible to specify a custom output location when making sprites. For example:
@@ -99,7 +100,7 @@ A settings line starts with a sprite name or a name pattern, followed by one or 
     *.pdn        converter: '"C:\Tools\PdnToPngConverter.exe"'       arguments: '/in="{input}" /out="{output}"'
 This sets the dither-scale to 0.5 for all sprites, and it tells SpriteMaker to treat blue (0 0 255) as transparent for all images whose filename contains '.at' (the alpha-transparency setting shorthand). It also sets the sprite type for the image named 'fire' to oriented, and disables dithering for that image. Finally, it tells SpriteMaker to call a converter application for each .pdn file in the image directory - SpriteMaker will then use the output image(s) produced by that application.
 
-If there are multiple matching rules, then all of their settings will be applied, but more specific rules will override settings defined by less specific rules. In the above example, a sprite named `fire` will use a dither-scale of 0.5 (because of the `*` rule) but dithering will also be disabled for it (because of the `fire` rule). If the `fire` rule would also have specified a dither-scale, then that dither-scale would have been used instead, because a sprite name rule is more specific than a wildcard rule.
+If there are multiple matching rules, all of their settings will be applied in order of appearance. In the above example, a sprite named `fire` will use a dither-scale of 0.5 (because of the `*` rule) but dithering will also be disabled for it (because of the `fire` rule). If the `fire` rule would also have specified a dither-scale, then that dither-scale would have been used instead, because the `fire` rule comes after the `*` rule.
 
 SpriteMaker keeps track of settings history in a `spritemaker.dat` file. This enables it to only update sprites whose settings have been modified (if `-full` mode is not enabled).
 
@@ -109,6 +110,8 @@ Sprite settings (for multi-frame sprites, the settings of the first frame are us
 
 - **type: sprite-type** - Sprite type must be `parallel-upright`, `upright`, `parallel`, `oriented` or `parallel-oriented` (or any of the shorthands: `pu`, `u`, `p`, `o` or `po`). The default type is 'parallel'.
 - **texture-format: texture-format** - Texture format must be `normal`, `additive`, `index-alpha` or `alpha-test` (or any of the shorthands: `n`, `a`, `ia` or `at`). The default format is 'additive'.
+- **ignore: true/false** - When true, matching files will be ignored. This can be used to exclude certain files or file types from the input directory.
+- **preserve-palette: true/false** - When true, input images that are already in an 8-bit indexed format will not be quantized - their palette will be used as-is. No special sprite-type specific handling will be performed. For animated sprites, all input images should be indexed using the same palette.
 
 Frame settings:
 
@@ -171,6 +174,12 @@ Or, when using advanced batch settings, save the right IrfanView batch settings 
 
     spritename      converter: '"C:\Program Files\IrfanView\i_view64.exe"' arguments: '"{input}" /silent /ini="C:\custom_irfanview_settings_dir" /advancedbatch /convert="{output}.png"'
 To use this conversion for multiple images, replace `spritename` with a wildcard pattern such as `if_*`, so any images whose name starts with `if_` will be converted using IrfanView.
+
+### Using pngquant for color conversion
+
+To use pngquant to convert images to 256 colors, add the following line to your `spritemaker.config` file:
+
+    texturename     converter: '"C:\HL\tools\pngquant\pngquant.exe"'    arguments: '"{input}" --output "{output}.png"'
 
 ### Converting Gimp files
 To automatically convert Gimp files, add the following line to your `spritemaker.config` file:
