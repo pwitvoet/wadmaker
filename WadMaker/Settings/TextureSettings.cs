@@ -132,6 +132,15 @@ namespace WadMaker.Settings
         public string? ConverterArguments { get; set; }
 
 
+        public TextureSettings()
+        {
+        }
+
+        public TextureSettings(TextureSettings settings)
+        {
+            OverrideWith(settings);
+        }
+
         /// <summary>
         /// Updates the current settings with the given settings.
         /// </summary>

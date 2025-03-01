@@ -67,7 +67,7 @@ namespace WadMaker
                     var isExistingTexture = existingTextureNames.Contains(textureName);
 
                     // Log a warning and skip this texture if anything is wrong with the input files:
-                    var isValid = VerifyTextureSourceFiles(textureName, textureSourceFiles, logger);
+                    var isValid = VerifyTextureName(textureName, textureSourceFiles, logger);
                     var hasError = false;
                     if (isValid)
                     {
@@ -85,28 +85,34 @@ namespace WadMaker
                         {
                             // Build the texture and add it to the wad file:
                             var texture = MakeTexture(textureName, textureSourceFiles, conversionOutputDirectory, isDecalsWad, logger);
-
-                            if (doIncrementalUpdate && isExistingTexture)
+                            if (texture is null)
                             {
-                                // Update (replace) existing texture:
-                                var index = wad.Textures.FindIndex(texture => texture.Name == textureName);
-                                if (index != -1)
-                                    wad.Textures[index] = texture;
-
-                                successfulTextureInputs[textureName] = textureSourceFiles;
-                                updatedTexturesCount += 1;
-
-                                logger.Log($"- Updated texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
+                                isValid = false;
                             }
                             else
                             {
-                                // Add new texture:
-                                wad.Textures.Add(texture);
+                                if (doIncrementalUpdate && isExistingTexture)
+                                {
+                                    // Update (replace) existing texture:
+                                    var index = wad.Textures.FindIndex(texture => texture.Name == textureName);
+                                    if (index != -1)
+                                        wad.Textures[index] = texture;
 
-                                successfulTextureInputs[textureName] = textureSourceFiles;
-                                addedTexturesCount += 1;
+                                    successfulTextureInputs[textureName] = textureSourceFiles;
+                                    updatedTexturesCount += 1;
 
-                                logger.Log($"- Added texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
+                                    logger.Log($"- Updated texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
+                                }
+                                else
+                                {
+                                    // Add new texture:
+                                    wad.Textures.Add(texture);
+
+                                    successfulTextureInputs[textureName] = textureSourceFiles;
+                                    addedTexturesCount += 1;
+
+                                    logger.Log($"- Added texture '{textureName}' (from {string.Join(", ", textureSourceFiles.Select(file => file.Path))}).");
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -201,11 +207,10 @@ namespace WadMaker
         }
 
         /// <summary>
-        /// Check wether the texture name is valid, whether all required files are provided, and whether there are any duplicate input files.
+        /// Check whether the texture name is valid.
         /// </summary>
-        private static bool VerifyTextureSourceFiles(string textureName, TextureSourceFileInfo[] textureSourceFiles, Logger logger)
+        private static bool VerifyTextureName(string textureName, TextureSourceFileInfo[] textureSourceFiles, Logger logger)
         {
-            // Does this texture have a valid name?
             if (!IsValidTextureName(textureName))
             {
                 logger.Log($"- WARNING: '{textureName}' is not a valid texture name ({string.Join(", ", textureSourceFiles.Select(file => file.Path))}). Skipping file(s).");
@@ -217,6 +222,14 @@ namespace WadMaker
                 return false;
             }
 
+            return true;
+        }
+
+        /// <summary>
+        /// Check whether all required files are provided, and whether there are any duplicate input files.
+        /// </summary>
+        private static bool VerifyTextureSourceFiles(string textureName, TextureSourceFileInfo[] textureSourceFiles, Logger logger)
+        {
             // Is the main image missing (e.g. only mipmap files have been provided, but not a full-size image)?
             var normalSourceFiles = textureSourceFiles.Where(file => file.Settings.IsFullbrightMask != true).ToArray();
             var mainSourceFile = normalSourceFiles.FirstOrDefault(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
@@ -296,16 +309,16 @@ namespace WadMaker
             return false;
         }
 
-        private static Texture MakeTexture(string textureName, TextureSourceFileInfo[] sourceFiles, string conversionOutputDirectory, bool isDecalsWad, Logger logger)
+        private static Texture? MakeTexture(string textureName, TextureSourceFileInfo[] sourceFiles, string conversionOutputDirectory, bool isDecalsWad, Logger logger)
         {
             // First gather all input files, converting any if necessary:
-            var convertedSourceFiles = new TextureSourceFileInfo[sourceFiles.Length];
+            var convertedSourceFiles = new List<TextureSourceFileInfo>();
             for (int i = 0; i < sourceFiles.Length; i++)
             {
                 var sourceFile = sourceFiles[i];
                 if (sourceFile.Settings.Converter is null)
                 {
-                    convertedSourceFiles[i] = sourceFile;
+                    convertedSourceFiles.Add(sourceFile);
                 }
                 else
                 {
@@ -322,20 +335,28 @@ namespace WadMaker
                     var supportedOutputFilePaths = outputFilePaths.Where(ImageFileIO.CanLoad).ToArray();
                     if (supportedOutputFilePaths.Length < 1)
                         throw new IOException("The converter did not produce a supported file type.");
-                    else if (supportedOutputFilePaths.Length > 1)
-                        throw new IOException("The converter produced multiple supported file types. Only one output file should be created.");
 
-                    convertedSourceFiles[i] = new TextureSourceFileInfo(supportedOutputFilePaths[0], 0, new FileHash(), DateTimeOffset.UtcNow, sourceFile.Settings);
+                    foreach (var supportedOutputFilePath in supportedOutputFilePaths)
+                    {
+                        var settings = new TextureSettings(sourceFile.Settings);
+                        settings.OverrideWith(WadMakingSettings.GetTextureSettingsFromFilename(supportedOutputFilePath));
+                        convertedSourceFiles.Add(new TextureSourceFileInfo(supportedOutputFilePath, 0, new FileHash(), DateTimeOffset.UtcNow, settings));
+                    }
                 }
             }
+
+            // Check whether all required files have been provided, and that there are no duplicate input files:
+            var isValid = VerifyTextureSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
+            if (!isValid)
+                return null;
 
             // Then build the texture:
             var mainFileSettings = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true).Settings;
             switch (mainFileSettings.TextureType)
             {
                 default:
-                case TextureType.MipmapTexture: return CreateMipmapTextureFromSourceFiles(textureName, convertedSourceFiles, isDecalsWad, logger);
-                case TextureType.SimpleTexture: return CreateSimpleTextureFromSourceFiles(textureName, convertedSourceFiles, logger);
+                case TextureType.MipmapTexture: return CreateMipmapTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), isDecalsWad, logger);
+                case TextureType.SimpleTexture: return CreateSimpleTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
                 case TextureType.Font: throw new NotSupportedException("Font textures are not supported.");
             }
         }
