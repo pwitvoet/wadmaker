@@ -340,7 +340,7 @@ namespace SpriteMaker
                 {
                     foreach (var sourceFile in orderedSourceFiles)
                     {
-                        var image = ImageFileIO.LoadImage(sourceFile.Path /*imageFilePath*/);
+                        var image = ImageFileIO.LoadImage(sourceFile.Path);
                         if (sourceFile.Settings.SpritesheetTileSize is Size tileSize)
                         {
                             if (tileSize.Width < 1 || tileSize.Height < 1)
