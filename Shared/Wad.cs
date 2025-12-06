@@ -130,7 +130,7 @@
                 stream.Write((uint)texture.Height);
 
                 stream.Write((uint)texture.RowCount);
-                stream.Write((uint)texture.RowHeight);
+                stream.Write((uint)texture.CharHeight);
                 foreach (var charInfo in texture.CharInfos!)
                 {
                     stream.Write((ushort)charInfo.StartOffset);
@@ -203,7 +203,7 @@
                 var mipmap3Data = stream.ReadBytes(width / 8 * height / 8);
 
                 var paletteSize = stream.ReadUshort();
-                var palette = Enumerable.Range(0, paletteSize)
+                var palette = Enumerable.Range(0, Math.Min(Constants.MaxPaletteSize, (int)paletteSize))
                     .Select(i => stream.ReadColor())
                     .ToArray();
 
@@ -211,22 +211,24 @@
             }
             else if (lump.Type == TextureType.Font)
             {
-                var width = (int)stream.ReadUint();
+                // Supposedly the width of the image, but in gfx.wad this contains the same value as the row-height field. The actual width seems to always be 256.
+                stream.ReadUint();
+                var width = Constants.FontImageWidth;
                 var height = (int)stream.ReadUint();
 
                 var rowCount = (int)stream.ReadUint();
-                var rowHeight = (int)stream.ReadUint();
-                var charInfos = Enumerable.Range(0, 256)
+                var charHeight = (int)stream.ReadUint();
+                var charInfos = Enumerable.Range(0, Constants.FontCharacterCount)
                     .Select(i => new CharInfo { StartOffset = stream.ReadUshort(), CharWidth = stream.ReadUshort() })
                     .ToArray();
                 var imageData = stream.ReadBytes(width * height);
 
                 var paletteSize = stream.ReadUshort();
-                var palette = Enumerable.Range(0, paletteSize)
+                var palette = Enumerable.Range(0, Math.Min(Constants.MaxPaletteSize, (int)paletteSize))
                     .Select(i => stream.ReadColor())
                     .ToArray();
 
-                return Texture.CreateFont(lump.Name, width, height, rowCount, rowHeight, charInfos, imageData, palette);
+                return Texture.CreateFont(lump.Name, width, height, rowCount, charHeight, charInfos, imageData, palette);
             }
             else if (lump.Type == TextureType.SimpleTexture)
             {
@@ -235,7 +237,7 @@
                 var imageData = stream.ReadBytes(width * height);
 
                 var paletteSize = stream.ReadUshort();
-                var palette = Enumerable.Range(0, paletteSize)
+                var palette = Enumerable.Range(0, Math.Min(Constants.MaxPaletteSize, (int)paletteSize))
                     .Select(i => stream.ReadColor())
                     .ToArray();
 

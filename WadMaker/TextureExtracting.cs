@@ -62,6 +62,9 @@ namespace WadMaker
                         var fileSettings = GetOutputFileTextureSettings(texture, mipmap);
                         var filePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
 
+                        if (texture.Type == TextureType.Font)
+                            SaveFontData(texture, baseFilePath, settings.OverwriteExistingFiles, logger);
+
                         if (!settings.OverwriteExistingFiles && File.Exists(filePath))
                         {
                             logger.Log($"- WARNING: '{filePath}' already exists. Skipping texture.");
@@ -139,6 +142,25 @@ namespace WadMaker
             logger.Log($"Extracted {embeddedTextures.Count} textures from '{inputBspFilePath}' to '{outputWadFilePath}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
+
+        private static void SaveFontData(Texture fontTexture, string baseFilePath, bool overwriteExistingFiles, Logger logger)
+        {
+            try
+            {
+                var filePath = Path.ChangeExtension(baseFilePath, ".font.txt");
+                if (!overwriteExistingFiles && File.Exists(filePath))
+                {
+                    logger.Log($"- WARNING: '{filePath}' already exists. Skipping font data.");
+                    return;
+                }
+
+                FontData.SaveFontData(fontTexture, filePath);
+            }
+            catch (Exception ex)
+            {
+                logger.Log($"- WARNING: Failed to write font data for '{fontTexture.Name}': {ex.GetType().Name}: '{ex.Message}'.");
+            }
+        }
 
         private static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
         {

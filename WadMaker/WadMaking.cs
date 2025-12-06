@@ -280,6 +280,17 @@ namespace WadMaker
                 }
             }
 
+            //Check presence of required font data files:
+            if (mainSourceFile.Settings.TextureType == TextureType.Font)
+            {
+                var fontDataFilePath = FontData.GetFilePath(mainSourceFile.Path);
+                if (!File.Exists(fontDataFilePath))
+                {
+                    logger.Log($"- WARNING: missing .font.txt file for '{textureName}' ({mainSourceFile.Path}). Skipping file.");
+                    return false;
+                }
+            }
+
             // Everything is looking good so far:
             return true;
         }
@@ -357,7 +368,7 @@ namespace WadMaker
                 default:
                 case TextureType.MipmapTexture: return CreateMipmapTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), isDecalsWad, logger);
                 case TextureType.SimpleTexture: return CreateSimpleTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
-                case TextureType.Font: throw new NotSupportedException("Font textures are not supported.");
+                case TextureType.Font: return CreateFontTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
             }
         }
 
@@ -828,30 +839,62 @@ namespace WadMaker
         private static Texture CreateSimpleTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, Logger logger)
         {
             if (sourceFiles.Length > 1)
-                logger.Log($"- WARNING: Skipping mipmap files for simple texture (qpic) '{textureName}'.");
+                logger.Log($"- WARNING: Skipping mipmap/fullbright files for simple texture (qpic) '{textureName}'.");
 
 
-            var mainFile = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true);
+            var mainFile = sourceFiles.First(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true);
+            var indexedImage = CreateIndexedImageData(mainFile);
+            return Texture.CreateSimpleTexture(
+                textureName,
+                indexedImage.Width,
+                indexedImage.Height,
+                indexedImage.ImageData,
+                indexedImage.Palette);
+        }
 
+        private static Texture CreateFontTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, Logger logger)
+        {
+            if (sourceFiles.Length > 1)
+                logger.Log($"- WARNING: Skipping mipmap/fullbright files for font texture '{textureName}'.");
+
+
+            var mainFile = sourceFiles.First(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true);
+            var indexedImage = CreateIndexedImageData(mainFile);
+
+            var fontDataFilePath = FontData.GetFilePath(mainFile.Path);
+            var fontData = FontData.LoadFontData(fontDataFilePath, logger);
+
+            return Texture.CreateFont(
+                textureName,
+                indexedImage.Width,
+                indexedImage.Height,
+                fontData.RowCount,
+                fontData.CharacterHeight,
+                fontData.CharInfos,
+                indexedImage.ImageData,
+                indexedImage.Palette);
+        }
+
+        /// <summary>
+        /// Creates an indexed image from the given source file. Transparent pixels are assigned to palette index 255.
+        /// This can be used for both qpics and fonts.
+        /// </summary>
+        private static IndexedImage CreateIndexedImageData(TextureSourceFileInfo sourceFile)
+        {
             // Do we need to preserve the source image's palette?
-            if (mainFile.Settings.PreservePalette == true && ImageFileIO.IsIndexed(mainFile.Path))
+            if (sourceFile.Settings.PreservePalette == true && ImageFileIO.IsIndexed(sourceFile.Path))
             {
-                var indexedImage = ImageFileIO.LoadIndexedImage(mainFile.Path);
+                var indexedImage = ImageFileIO.LoadIndexedImage(sourceFile.Path);
                 var palette = indexedImage.Palette.Concat(Enumerable.Range(0, Constants.MaxPaletteSize - indexedImage.Palette.Length).Select(i => new Rgba32())).ToArray();
 
-                return Texture.CreateSimpleTexture(
-                    name: textureName,
-                    width: indexedImage.Width,
-                    height: indexedImage.Height,
-                    imageData: indexedImage.ImageData,
-                    palette: palette);
+                return new IndexedImage(indexedImage.ImageData, indexedImage.Width, indexedImage.Height, palette);
             }
 
 
-            using (var image = ImageFileIO.LoadImage(mainFile.Path))
+            using (var image = ImageFileIO.LoadImage(sourceFile.Path))
             {
-                // Qpics are alpha-test textures:
-                var textureSettings = mainFile.Settings;
+                // Alpha-test:
+                var textureSettings = sourceFile.Settings;
                 var transparencyThreshold = Math.Clamp(textureSettings.TransparencyThreshold ?? Constants.DefaultTransparencyThreshold, 0, 255);
                 var isTransparentPredicate = Util.MakeTransparencyPredicate(transparencyThreshold, textureSettings.TransparencyColor);
 
@@ -886,17 +929,11 @@ namespace WadMaker
                 }
 
                 // Create texture data:
-                var textureData = CreateTextureData(image, palette, colorIndexMappingCache, mainFile.Settings, isTransparentPredicate, disableDithering: false);
+                var textureData = CreateTextureData(image, palette, colorIndexMappingCache, sourceFile.Settings, isTransparentPredicate, disableDithering: false);
 
-                return Texture.CreateSimpleTexture(
-                    name: textureName,
-                    width: image.Width,
-                    height: image.Height,
-                    imageData: textureData,
-                    palette: palette);
+                return new IndexedImage(textureData, image.Width, image.Height, palette);
             }
         }
-
 
 
         private static void VerifyMipmapTextureSizes(string textureName, Image<Rgba32> mainImage, IReadOnlyList<Image<Rgba32>?> mipmapImages)

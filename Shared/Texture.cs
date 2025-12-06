@@ -67,23 +67,23 @@ namespace Shared
             int width,
             int height,
             int rowCount,
-            int rowHeight,
+            int charHeight,
             IEnumerable<CharInfo> charInfos,
             byte[]? imageData = null,
             IEnumerable<Rgba32>? palette = null)
         {
-            if (width != 256) throw new ArgumentException("Width must be 256.", nameof(width));
+            if (width != Constants.FontImageWidth) throw new ArgumentException($"Width must be {Constants.FontImageWidth}.", nameof(width));
             if (height < 1) throw new ArgumentException("Height must be greater than zero.", nameof(height));
             if (rowCount < 1) throw new ArgumentException("Row count must be greater than zero.", nameof(rowCount));
-            if (rowCount < 1) throw new ArgumentException("Row height must be greater than zero.", nameof(rowHeight));
-            if (charInfos.Count() != 256) throw new ArgumentException("Exactly 256 char infos must be provided.", nameof(charInfos));
+            if (rowCount < 1) throw new ArgumentException("Character height must be greater than zero.", nameof(charHeight));
+            if (charInfos.Count() != Constants.FontCharacterCount) throw new ArgumentException($"Exactly {Constants.FontCharacterCount} char infos must be provided.", nameof(charInfos));
             if (imageData != null && imageData.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
             if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
             return new Texture(TextureType.Font, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
                 RowCount = rowCount,
-                RowHeight = rowHeight,
-                CharInfos = charInfos?.ToArray() ?? new CharInfo[256],
+                CharHeight = charHeight,
+                CharInfos = charInfos?.ToArray() ?? new CharInfo[Constants.FontCharacterCount],
             };
         }
 
@@ -101,9 +101,9 @@ namespace Shared
         public byte[]? Mipmap3Data { get; private set; }
 
         // Font only:
-        public int RowCount { get; private set;  }
-        public int RowHeight { get; private set;  }
-        public CharInfo[]? CharInfos { get; private set;  }
+        public int RowCount { get; private set; }
+        public int CharHeight { get; private set; }
+        public CharInfo[]? CharInfos { get; private set; }
 
         // Texture and Font only:
         public Rgba32[] Palette { get; }
