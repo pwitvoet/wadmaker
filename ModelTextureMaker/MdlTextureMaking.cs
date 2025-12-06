@@ -404,8 +404,12 @@ namespace ModelTextureMaker
 
                 var coverageMap = GetCoverageMap(colorRemapInputImages);
 
+                var firstInputImageType = colorRemapInputImages.First().Type;
+                var paletteOffset = firstInputImageType == ColorMask.Main ? 0 :
+                                  firstInputImageType == ColorMask.Color1 ? color1PaletteStart :
+                                                                            color1PaletteStart + color1Count;
+
                 // Prepare the image data, and generate the palette by combining the palettes from the standard and remap color areas:
-                var paletteOffset = 0;
                 foreach (var colorRemapInputImage in colorRemapInputImages)
                 {
                     var hasNonContiguousPaletteRange = colorRemapInputImage.Type == ColorMask.Main && colorRemapInputImage.ColorCount > color1PaletteStart;
