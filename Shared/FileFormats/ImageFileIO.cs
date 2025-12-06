@@ -104,7 +104,7 @@ namespace Shared.FileFormats
                 case ImageFormat.Jpg: return new JpegEncoder();
                 case ImageFormat.Gif: return new GifEncoder();
                 case ImageFormat.Bmp: return new BmpEncoder();
-                case ImageFormat.Tga: return new TgaEncoder();
+                case ImageFormat.Tga: return new TgaEncoder { BitsPerPixel = TgaBitsPerPixel.Pixel32 };
             }
         }
 
