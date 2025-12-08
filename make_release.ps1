@@ -27,7 +27,7 @@ foreach ($platform in $platforms) {
     Copy-Item -Path '.\ImageSharp THIRD-PARTY-NOTICES.TXT' -Destination $output_dir
 
     # TODO: Maybe create platform-specific 'files' folders?
-    if ($($platform.name).Contains("linux")) {
+    if (!$($platform.name).Contains("win")) {
         Remove-Item -Path "$output_dir\*.bat"
     }
 
