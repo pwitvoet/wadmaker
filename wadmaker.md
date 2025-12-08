@@ -86,7 +86,7 @@ WadMaker keeps track of settings history in a `wadmaker.dat` file. This enables 
 
 General settings:
 
-- **texture-type: type** - Type must be either `mipmap` or `qpic`. Mipmap is the default.
+- **texture-type: type** - Type must be either `mipmap`, `qpic` or `font`. Mipmap is the default.
 - **ignore: true/false** - When true, matching files will be ignored. This can be used to exclude certain files or file types from the input directory.
 - **preserve-palette: true/false** - When true, input images that are already in an 8-bit indexed format will not be quantized - their palette will be used as-is. No special texture-type specific handling will be performed.
 
@@ -144,7 +144,7 @@ Additionally, some textures serve a special purpose for the map compile tools, s
 - `NULL` is used to remove surfaces that are not visible to the player.
 - `HINT` (along with `SKIP`) is used to force a bsp node cut. Strategic use of this can improve performance.
 
-Besides standard textures (so-called 'mipmap' textures), wad files can also contain qpic images and fonts. To create a qpic image, add `.qpic.` to the input image's filename: `image.qpic.png`. Qpics are only used for some loading graphics, and cannot be used as textures. Their width and height do not need to be a multiple of 16. WadMaker does not support fonts.
+Besides standard textures (so-called 'mipmap' textures), wad files can also contain qpic images and fonts. These can be created by adding `.qpic` or `.font` to the input image's filename, respectively. For fonts a `.font.txt` file with character rectangle information is also required. Qpics are only used for some loading graphics, and cannot be used as textures. Their width and height do not need to be a multiple of 16. Wad file fonts are no longer used in Half-Life, but they may be used by other engines.
 
 ## Comparisons
 Just like Wally, WadMaker can convert true-color images to the 256-color indexed format that Half-Life uses. For textures that do not contain a wide range of colors and gradients, this often does not lead to a perceptible loss of quality. In cases where it does matter, WadMaker tends to produce better results than Wally due to its use of dithering, but it does worse than IrfanView:
