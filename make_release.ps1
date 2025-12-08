@@ -1,6 +1,7 @@
-$platforms = @{ name = 'win64';   profile = 'Windows64bit.pubxml'; runtime = 'win-x64'   },
-             @{ name = 'win32';   profile = 'Windows32bit.pubxml'; runtime = 'win-x86'   },
-             @{ name = 'linux64'; profile = 'Linux64bit.pubxml';   runtime = 'linux-x64' }
+$platforms = @{ name = 'win64';         runtime = 'win-x64'   },
+             @{ name = 'win32';         runtime = 'win-x86'   },
+             @{ name = 'linux64';       runtime = 'linux-x64' },
+             @{ name = 'osxx64';        runtime = 'osx-x64'  }
 
 # Build all platform variants:
 foreach ($platform in $platforms) {
