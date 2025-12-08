@@ -1,7 +1,7 @@
 $platforms = @{ name = 'win64';         runtime = 'win-x64'   },
              @{ name = 'win32';         runtime = 'win-x86'   },
              @{ name = 'linux64';       runtime = 'linux-x64' },
-             @{ name = 'osxx64';        runtime = 'osx-x64'  }
+             @{ name = 'osx64';         runtime = 'osx-x64'  }
 
 # Build all platform variants:
 foreach ($platform in $platforms) {
