@@ -8,6 +8,7 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Tga;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using System.Buffers.Binary;
 
 namespace Shared.FileFormats
 {
@@ -90,6 +91,9 @@ namespace Shared.FileFormats
                 var imageEncoder = GetIndexedImageEncoder(format, indexedImageSavingQuantizer);
                 dummyImage.Save(path, imageEncoder);
             }
+
+            if (format == ImageFormat.Bmp)
+                SetClrUsedByte(path, indexedImage.Palette.Length);
         }
 
 
@@ -130,6 +134,42 @@ namespace Shared.FileFormats
 
                 default: throw new NotSupportedException($"{format} format does not support indexed images.");
             }
+        }
+
+        //Tony; the gameui bitmap loader requires the biClrUsed property to actually be set; but ImageSharp is forcing it to 0.
+        // https://github.com/SixLabors/ImageSharp/blob/v3.1.11/src/ImageSharp/Formats/Bmp/BmpEncoderCore.cs#L210-L220
+        private static void SetClrUsedByte(string path, int paletteSize)
+        {
+            if (paletteSize <= 0)
+                return;
+
+            using var stream = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+            if (stream.Length < 54)
+                return;
+
+            Span<byte> header = stackalloc byte[54];
+            var read = stream.Read(header);
+            if (read < header.Length)
+                return;
+
+            if (header[0] != (byte)'B' || header[1] != (byte)'M')
+                return;
+
+            var dibHeaderSize = BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(14, 4));
+            if (dibHeaderSize < 40)
+                return;
+
+            var bitsPerPixel = BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(28, 2));
+            if (bitsPerPixel is not (1 or 2 or 4 or 8))
+                return;
+
+            var maxColors = 1 << bitsPerPixel;
+            var clrUsed = (uint)Math.Clamp(paletteSize, 1, maxColors);
+
+            Span<byte> clrUsedBytes = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32LittleEndian(clrUsedBytes, clrUsed);
+            stream.Seek(46, SeekOrigin.Begin);
+            stream.Write(clrUsedBytes);
         }
     }
 }
