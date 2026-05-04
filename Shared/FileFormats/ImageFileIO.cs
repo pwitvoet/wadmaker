@@ -15,6 +15,7 @@ namespace Shared.FileFormats
     {
         private static IImageReader[] _imageReaders;
         private static IDictionary<string, IImageReader> _extensionReaderMapping;
+        private static ImageWriter _imageWriter;
 
         static ImageFileIO()
         {
@@ -27,8 +28,12 @@ namespace Shared.FileFormats
 
             _extensionReaderMapping = new Dictionary<string, IImageReader>(StringComparer.InvariantCultureIgnoreCase);
             foreach (var reader in _imageReaders)
+            {
                 foreach (var extension in reader.SupportedExtensions)
                     _extensionReaderMapping[extension] = reader;
+            }
+
+            _imageWriter = new ImageWriter();
         }
 
 
@@ -75,61 +80,16 @@ namespace Shared.FileFormats
         /// Saves the given image in the specified format.
         /// </summary>
         public static void SaveImage(Image<Rgba32> image, string path, ImageFormat format)
-            => image.Save(path, GetImageEncoder(format));
+            => _imageWriter.WriteImage(image, path, format);
 
         /// <summary>
         /// Saves the given indexed image in the specified format.
         /// An exception will be thrown if the format does not support indexed images.
         /// </summary>
         public static void SaveIndexedImage(IndexedImage indexedImage, string path, ImageFormat format)
-        {
-            // NOTE: The custom 'quantizer' contains the actual image data and palette, but we still need an Image instance so we can use its Save method:
-            using (var indexedImageSavingQuantizer = new IndexedImageSavingQuantizer(indexedImage))
-            using (var dummyImage = new Image<Rgba32>(indexedImage.Width, indexedImage.Height))
-            {
-                var imageEncoder = GetIndexedImageEncoder(format, indexedImageSavingQuantizer);
-                dummyImage.Save(path, imageEncoder);
-            }
-        }
+            => _imageWriter.WriteIndexedImage(indexedImage, path, format);
 
 
         private static string GetExtension(string path) => Path.GetExtension(path).TrimStart('.');
-
-        private static ImageEncoder GetImageEncoder(ImageFormat format)
-        {
-            switch (format)
-            {
-                default:
-                case ImageFormat.Png: return new PngEncoder();
-                case ImageFormat.Jpg: return new JpegEncoder();
-                case ImageFormat.Gif: return new GifEncoder();
-                case ImageFormat.Bmp: return new BmpEncoder();
-                case ImageFormat.Tga: return new TgaEncoder { BitsPerPixel = TgaBitsPerPixel.Pixel32 };
-            }
-        }
-
-        private static QuantizingImageEncoder GetIndexedImageEncoder(ImageFormat format, IQuantizer quantizer)
-        {
-            switch (format)
-            {
-                case ImageFormat.Png: return new PngEncoder {
-                    BitDepth = PngBitDepth.Bit8,
-                    ColorType = PngColorType.Palette,
-                    Quantizer = quantizer,
-                };
-
-                case ImageFormat.Gif: return new GifEncoder {
-                    ColorTableMode = GifColorTableMode.Global,
-                    Quantizer = quantizer,
-                };
-
-                case ImageFormat.Bmp: return new BmpEncoder {
-                    BitsPerPixel = BmpBitsPerPixel.Pixel8,
-                    Quantizer = quantizer,
-                };
-
-                default: throw new NotSupportedException($"{format} format does not support indexed images.");
-            }
-        }
     }
 }
