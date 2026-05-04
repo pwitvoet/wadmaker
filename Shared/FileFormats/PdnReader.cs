@@ -5,7 +5,6 @@ using System.Formats.Nrbf;
 
 namespace Shared.FileFormats
 {
-#pragma warning disable SYSLIB5005 // TODO: Update System.Formats.Nrbf to a non-experimental version (when available)!
     public class PdnReader : IImageReader
     {
         public string[] SupportedExtensions { get; } = new[] { "pdn" };
@@ -169,5 +168,4 @@ namespace Shared.FileFormats
             }
         }
     }
-#pragma warning restore SYSLIB5005
 }

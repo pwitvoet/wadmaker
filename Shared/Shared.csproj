@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
-    <PackageReference Include="System.Formats.Nrbf" Version="9.0.9" />
+    <PackageReference Include="System.Formats.Nrbf" Version="10.0.7" />
   </ItemGroup>
 
   <ItemGroup>
