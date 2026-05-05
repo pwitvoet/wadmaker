@@ -148,6 +148,8 @@ namespace WadMaker
                 var textureOrder = TextureOrder.GetTextureOrder(inputDirectory);
                 if (textureOrder != null)
                 {
+                    logger.Log("Ordering textures according to texture order file.");
+
                     var textures = wad.Textures.ToDictionary(texture => texture.Name, texture => texture);
                     wad.Textures.Clear();
 
@@ -166,7 +168,11 @@ namespace WadMaker
                     }
 
                     // Unlisted textures are added at the end:
-                    wad.Textures.AddRange(textures.Values);
+                    if (textures.Any())
+                    {
+                        wad.Textures.AddRange(textures.Values);
+                        logger.Log($"{textures.Count} textures were added at the end because they were not listed in the texture order file.");
+                    }
                 }
 
                 // Save the wad file:
