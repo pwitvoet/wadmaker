@@ -144,6 +144,31 @@ namespace WadMaker
                     }
                 }
 
+                // Check whether we should store textures in a specific order:
+                var textureOrder = TextureOrder.GetTextureOrder(inputDirectory);
+                if (textureOrder != null)
+                {
+                    var textures = wad.Textures.ToDictionary(texture => texture.Name, texture => texture);
+                    wad.Textures.Clear();
+
+                    for (int i = 0; i < textureOrder.Length; i++)
+                    {
+                        var textureName = textureOrder[i];
+                        if (textures.TryGetValue(textureName, out var texture))
+                        {
+                            wad.Textures.Add(texture);
+                            textures.Remove(textureName);
+                        }
+                        else
+                        {
+                            logger.Log($"- WARNING: Texture '{textureName}' at index #{i} in the texture order file does not exist!");
+                        }
+                    }
+
+                    // Unlisted textures are added at the end:
+                    wad.Textures.AddRange(textures.Values);
+                }
+
                 // Save the wad file:
                 Util.CreateDirectory(Path.GetDirectoryName(outputWadFilePath));
                 wad.Save(outputWadFilePath);
@@ -187,7 +212,7 @@ namespace WadMaker
         {
             foreach (var path in Directory.EnumerateFiles(inputDirectory))
             {
-                if (WadMakingSettings.IsConfigurationFile(path) || WadMakingHistory.IsHistoryFile(path))
+                if (WadMakingSettings.IsConfigurationFile(path) || WadMakingHistory.IsHistoryFile(path) || TextureOrder.IsTextureOrderFile(path))
                     continue;
 
                 yield return path;

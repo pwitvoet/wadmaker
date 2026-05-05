@@ -22,6 +22,7 @@ namespace WadMaker
         public bool OverwriteExistingFiles { get; set; }    // -overwrite       Extract mode only, enables overwriting of existing image files (off by default)
         public ImageFormat OutputImageFormat { get; set; }  // -format          Extracted images output format (png, jpg, gif, bmp or tga).
         public bool ExtractAsIndexed { get; set; }          // -indexed         Extracted images are indexed and contain the original texture's palette. Only works with png, gif and bmp.
+        public bool SaveTextureOrder { get; set; }          // -order           Save the original texture order to a file.
 
         [MemberNotNullWhen(true, nameof(InputFilePath))]
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
@@ -72,10 +73,13 @@ namespace WadMaker
                 var logger = new Logger(Log);
                 if (settings.Extract)
                 {
+                    var isDecalsWad = IsDecalsWad(settings.InputFilePath);
                     var extractionSettings = new ExtractionSettings {
                         ExtractMipmaps = settings.ExtractMipmaps,
                         NoFullbrightMasks = settings.NoFullbrightMasks,
                         OverwriteExistingFiles = settings.OverwriteExistingFiles,
+                        ExtractAsDecals = isDecalsWad,
+                        SaveTextureOrderFile = settings.SaveTextureOrder || isDecalsWad,
                         OutputFormat = settings.OutputImageFormat,
                         SaveAsIndexed = settings.ExtractAsIndexed,
                     };
@@ -139,6 +143,7 @@ namespace WadMaker
                         break;
 
                     case "-indexed": settings.ExtractAsIndexed = true; break;
+                    case "-order": settings.SaveTextureOrder = true; break;
                     case "-remove": settings.RemoveEmbeddedTextures = true; break;
                     case "-nologfile": settings.DisableFileLogging = true; break;
 
@@ -239,6 +244,8 @@ namespace WadMaker
             }
         }
 
+
+        private static bool IsDecalsWad(string wadFilePath) => Path.GetFileName(wadFilePath).ToLowerInvariant() == "decals.wad";
 
         private static void Log(string? message)
         {

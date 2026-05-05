@@ -13,6 +13,8 @@ namespace WadMaker
         public bool ExtractMipmaps { get; set; }
         public bool NoFullbrightMasks { get; set; }
         public bool OverwriteExistingFiles { get; set; }
+        public bool ExtractAsDecals { get; set; }
+        public bool SaveTextureOrderFile { get; set; }
 
         public ImageFormat OutputFormat { get; set; }
         public bool SaveAsIndexed { get; set; }
@@ -47,10 +49,9 @@ namespace WadMaker
 
             Util.CreateDirectory(outputDirectory);
 
-            var isDecalsWad = Path.GetFileName(inputFilePath).ToLowerInvariant() == "decals.wad";
             foreach (var texture in textures)
             {
-                var isFullbrightTexture = !isDecalsWad && TextureName.IsFullbright(texture.Name);
+                var isFullbrightTexture = !settings.ExtractAsDecals && TextureName.IsFullbright(texture.Name);
 
                 var maxMipmap = (texture.Type == TextureType.MipmapTexture && settings.ExtractMipmaps) ? 4 : 1;
                 for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
@@ -83,7 +84,7 @@ namespace WadMaker
                         }
                         else
                         {
-                            using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
+                            using (var image = settings.ExtractAsDecals ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
                             {
                                 if (image != null)
                                 {
@@ -120,6 +121,11 @@ namespace WadMaker
                         logger.Log($"- ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
                     }
                 }
+            }
+
+            if (settings.SaveTextureOrderFile)
+            {
+                TextureOrder.SaveTextureOrder(outputDirectory, textures.Select(texture => texture.Name));
             }
 
             logger.Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from '{inputFilePath}' to '{outputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
