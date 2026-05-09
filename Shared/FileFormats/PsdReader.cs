@@ -1,5 +1,6 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Buffers.Binary;
 
 namespace Shared.FileFormats
 {
@@ -188,8 +189,7 @@ namespace Shared.FileFormats
                     {
                         // Big-endian floating point:
                         var row = channelData[channel][y];
-                        var data = new byte[] { row[x * 4 + 3], row[x * 4 + 2], row[x * 4 + 1], row[x * 4] };
-                        return (int)(BitConverter.ToSingle(data, 0) * 255);
+                        return (int)(BinaryPrimitives.ReadSingleBigEndian(row.AsSpan(x * 4, 4)) * 255);
                     };
 
                 default:

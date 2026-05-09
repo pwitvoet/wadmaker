@@ -1,4 +1,5 @@
 ﻿using SixLabors.ImageSharp.PixelFormats;
+using System.Buffers.Binary;
 using System.Text;
 
 namespace Shared
@@ -7,21 +8,47 @@ namespace Shared
     {
         #region Reading
 
-        public static short ReadShort(this Stream stream) => BitConverter.ToInt16(stream.ReadBytes(2), 0);
+        public static short ReadShort(this Stream stream)
+        {
+            Span<byte> data = stackalloc byte[2];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadInt16LittleEndian(data);
+        }
 
-        public static ushort ReadUshort(this Stream stream) => BitConverter.ToUInt16(stream.ReadBytes(2), 0);
+        public static ushort ReadUshort(this Stream stream)
+        {
+            Span<byte> data = stackalloc byte[2];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadUInt16LittleEndian(data);
+        }
 
         public static int ReadInt24(this Stream stream)
         {
-            var data = ReadBytes(stream, 3);
+            Span<byte> data = stackalloc byte[3];
+            stream.ReadExactly(data);
             return (data[0]) | (data[1] << 8) | (data[2] << 16);
         }
 
-        public static int ReadInt(this Stream stream) => BitConverter.ToInt32(stream.ReadBytes(4), 0);
+        public static int ReadInt(this Stream stream)
+        {
+            Span<byte> data = stackalloc byte[4];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadInt32LittleEndian(data);
+        }
 
-        public static uint ReadUint(this Stream stream) => BitConverter.ToUInt32(stream.ReadBytes(4), 0);
+        public static uint ReadUint(this Stream stream)
+        {
+            Span<byte> data = stackalloc byte[4];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadUInt32LittleEndian(data);
+        }
 
-        public static float ReadFloat(this Stream stream) => BitConverter.ToSingle(stream.ReadBytes(4), 0);
+        public static float ReadFloat(this Stream stream)
+        {
+            Span<byte> data = stackalloc byte[4];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadSingleLittleEndian(data);
+        }
 
         public static string ReadString(this Stream stream, int length)
         {
@@ -38,31 +65,30 @@ namespace Shared
         public static byte[] ReadBytes(this Stream stream, int count)
         {
             var buffer = new byte[count];
-            var bytesRead = stream.Read(buffer, 0, count);
-            if (bytesRead < count)
-                throw new EndOfStreamException($"Expected {count} bytes but found only {bytesRead}.");
+            stream.ReadExactly(buffer, 0, count);
             return buffer;
         }
 
 
         public static int ReadIntBigEndian(this Stream stream)
         {
-            var data = stream.ReadBytes(4);
-            Array.Reverse(data);
-            return BitConverter.ToInt32(data, 0);
+            Span<byte> data = stackalloc byte[4];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadInt32BigEndian(data);
         }
 
         public static uint ReadUintBigEndian(this Stream stream)
         {
-            var data = stream.ReadBytes(4);
-            Array.Reverse(data);
-            return BitConverter.ToUInt32(data, 0);
+            Span<byte> data = stackalloc byte[4];
+            stream.ReadExactly(data);
+            return BinaryPrimitives.ReadUInt32BigEndian(data);
         }
 
 
         public static Rgba32 ReadColor(this Stream stream)
         {
-            var data = stream.ReadBytes(3);
+            Span<byte> data = stackalloc byte[3];
+            stream.ReadExactly(data);
             return new Rgba32(data[0], data[1], data[2]);
         }
 
@@ -73,13 +99,33 @@ namespace Shared
 
         public static void Write(this Stream stream, byte value) => stream.WriteByte(value);
 
-        public static void Write(this Stream stream, ushort value) => stream.Write(BitConverter.GetBytes(value));
+        public static void Write(this Stream stream, ushort value)
+        {
+            Span<byte> data = stackalloc byte[2];
+            BinaryPrimitives.WriteUInt16LittleEndian(data, value);
+            stream.Write(data);
+        }
 
-        public static void Write(this Stream stream, int value) => stream.Write(BitConverter.GetBytes(value));
+        public static void Write(this Stream stream, int value)
+        {
+            Span<byte> data = stackalloc byte[4];
+            BinaryPrimitives.WriteInt32LittleEndian(data, value);
+            stream.Write(data);
+        }
 
-        public static void Write(this Stream stream, uint value) => stream.Write(BitConverter.GetBytes(value));
+        public static void Write(this Stream stream, uint value)
+        {
+            Span<byte> data = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32LittleEndian(data, value);
+            stream.Write(data);
+        }
 
-        public static void Write(this Stream stream, float value) => stream.Write(BitConverter.GetBytes(value));
+        public static void Write(this Stream stream, float value)
+        {
+            Span<byte> data = stackalloc byte[4];
+            BinaryPrimitives.WriteSingleLittleEndian(data, value);
+            stream.Write(data);
+        }
 
         public static void Write(this Stream stream, string value) => stream.Write(Encoding.ASCII.GetBytes(value));
 
@@ -91,10 +137,8 @@ namespace Shared
                 stream.Write(new byte[length - bytes.Length], 0, length - bytes.Length);
         }
 
-        public static void Write(this Stream stream, byte[] bytes) => stream.Write(bytes, 0, bytes.Length);
 
-
-        public static void Write(this Stream stream, Rgba32 value) => stream.Write(new byte[] { value.R, value.G, value.B });
+        public static void Write(this Stream stream, Rgba32 value) => stream.Write([value.R, value.G, value.B]);
 
         #endregion
 

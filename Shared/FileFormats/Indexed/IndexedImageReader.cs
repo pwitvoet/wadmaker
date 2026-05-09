@@ -5,6 +5,7 @@ using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Text;
 using SixLabors.ImageSharp;
+using System.Buffers.Binary;
 
 namespace Shared.FileFormats.Indexed
 {
@@ -159,8 +160,8 @@ namespace Shared.FileFormats.Indexed
             for (int i = 0; i < palette.Length; i++)
                 fakePaletteData[i * 3] = (byte)i;
 
-            var fakePaletteDataCrc = BitConverter.GetBytes(GetCrc32(Encoding.ASCII.GetBytes("PLTE").Concat(fakePaletteData)));
-            Array.Reverse(fakePaletteDataCrc);      // PNG stores CRCs in big endian order.
+            var fakePaletteDataCrc = new byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(fakePaletteDataCrc, GetCrc32(Encoding.ASCII.GetBytes("PLTE").Concat(fakePaletteData)));
             fakePaletteData = fakePaletteData.Concat(fakePaletteDataCrc).ToArray();
 
 
