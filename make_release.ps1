@@ -16,7 +16,7 @@ $version = (Get-Item .\WadMaker\bin\Release\net8.0\publish\win-x64\WadMaker.exe)
 foreach ($platform in $platforms) {
     # Create output directory:
     $output_dir = ".\Releases\${version}\WadMaker_${version}_$($platform.name)"
-    [System.IO.Directory]::CreateDirectory($output_dir)
+    New-Item -ItemType Directory -Force -Path $output_dir
 
     # Copy files (executables, config files, examples, documentation, 3rd party licenses):
     Copy-Item -Path .\WadMaker\bin\Release\net8.0\publish\$($platform.runtime)\* -Destination $output_dir
