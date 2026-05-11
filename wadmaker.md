@@ -10,6 +10,7 @@
     - [Texture-specific settings](#texture-specific-settings)
         - [wadmaker.config format](#wadmakerconfig-format)
         - [Available settings](#available-settings)
+    - [Texture order](#texture-order)
 - [About Half-Life textures](#about-half-life-textures)
 - [Comparisons](#comparisons)
 - [Custom converters](#custom-converters)
@@ -28,7 +29,7 @@ WadMaker accepts the following image file formats:
 - Paint.NET files (.pdn).
 - Other formats can be used with the help of external conversion tools.
 
-It will automatically create a suitable 256-color palette for each image. It will also apply a limited form of dithering, which can be disabled if necessary. For transparent textures, the alpha channel of the input image is compared against a configurable threshold, but it is also possible to treat a specific input color as transparent. For water textures, the fog color and intensity are derived from the image itself, but they can also be specified explicitly. All these texture-specific settings can be overridden with a plain-text wadmaker.config file in the images directory.
+It will automatically create a suitable 256-color palette for each image. It will also apply a limited form of dithering, which can be disabled if necessary. For transparent textures, the alpha channel of the input image is compared against a configurable threshold, but it is also possible to treat a specific input color as transparent. For water textures, the fog color and intensity are derived from the image itself, but they can also be specified explicitly. All these texture-specific settings can be overridden with a plain-text `wadmaker.config` file in the images directory.
 
 ### Intended workflow
 Existing workflows sometimes involve a lot of steps, such as exporting or converting images to an 8-bit indexed format, manually adjusting palettes for special texture types, marking transparent areas with special colors, opening a GUI tool, dragging images into it, then saving the modified wad file, and so on.
@@ -50,6 +51,7 @@ The behavior of WadMaker can be modified with several command-line options. To u
 - **-overwrite** - Enables overwriting of existing files when extracting textures.
 - **-format \<fmt\>** - Extracted images output format (\<fmt\> must be `png`, `jpg`, `gif`, `bmp` or `tga`).
 - **-indexed** - Extract textures as 8-bit indexed images (only works with png and bmp).
+- **-order** - Save the texture order to a `texture_order.txt` file.
 - **-remove** - Removes embedded textures from a bsp file.
 - **-nologfile** - Stops WadMaker from creating a 'wadmaker - directoryname.log' file when making wad files.
 
@@ -123,7 +125,12 @@ Conversion settings:
   - `{output}` - The full path of where WadMaker expects to find the output file(s), without extension. For example: `C:\HL\mymod\textures\converted_12345678-9abc-def0-1234-56789abcdef0\wall2`.
   - `{output_escaped}` - Same as `{output}`, but with escaped backslashes: `C:\\HL\\mymod\\textures\\converted_12345678-9abc-def0-1234-56789abcdef0\\wall2`.
 
-### About Half-Life textures
+### Texture order
+The order in which textures are stored in a wad file normally doesn't matter. However, mods that use a large number of custom decal textures may encounter problems if decals that the game relies on (such as bullet holes or blood splats) are not part of the first 256 textures in `decals.wad`.
+
+To save textures in a specific order, create a plain-text `texture_order.txt` file in the images directory. Put the name of each texture on a separate line. Lines that start with `//` will be ignored. When extracting `decals.wad`, WadMaker will automatically generate a `texture_order.txt` file.
+
+## About Half-Life textures
 Half-Life textures use a 256-color palette, and their width and height must be multiples of 16. Texture names cannot be longer than 15 characters and cannot contain spaces. Texture name matching is case-insensitive ('aa' and 'AA' are seen as the same texture name).
 
 Note that wad files do not store color profile information. Some testing has shown that Half-Life (and Wally) does not appear to apply gamma correction properly on all systems. This means that on some systems, textures (especially dark ones) will look too bright.
