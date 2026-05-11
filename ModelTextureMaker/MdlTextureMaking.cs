@@ -434,16 +434,19 @@ namespace ModelTextureMaker
                     }
                     Array.Copy(indexedImage.Palette, 0, palette, paletteOffset, indexedImage.Palette.Length);
 
-                    // The main image colors may be interrupted by the color1 and color2 ranges:
-                    if (hasNonContiguousPaletteRange && indexedImage.Palette.Length > color1PaletteStart)
+                    if (hasNonContiguousPaletteRange)
                     {
-                        var offset = (byte)(color1Count + color2Count);
-                        for (int i = 0; i < imageData.Length; i++)
+                        // The main image colors may be interrupted by the color1 and color2 ranges:
+                        if (indexedImage.Palette.Length > color1PaletteStart)
                         {
-                            if (coverageMap[i] == coverageID && imageData[i] >= color1PaletteStart)
-                                imageData[i] += offset;
+                            var offset = (byte)(color1Count + color2Count);
+                            for (int i = 0; i < imageData.Length; i++)
+                            {
+                                if (coverageMap[i] == coverageID && imageData[i] >= color1PaletteStart)
+                                    imageData[i] += offset;
+                            }
+                            Array.Copy(indexedImage.Palette, color1PaletteStart, palette, color1PaletteStart + offset, indexedImage.Palette.Length - color1PaletteStart);
                         }
-                        Array.Copy(indexedImage.Palette, color1PaletteStart, palette, color1PaletteStart + offset, indexedImage.Palette.Length - color1PaletteStart);
 
                         paletteOffset += color1PaletteStart;
                     }
