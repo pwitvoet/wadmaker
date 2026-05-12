@@ -101,7 +101,7 @@ namespace Shared.FileFormats
         /// <summary>
         /// This sets the biClrUsed field of the bitmap info header to the number of colors used.
         /// ImageSharp sets that field to 0, which means that the maximum number of colors for the given bit-depth is used,
-        /// but somehow Half-Life doesn't interpret that value correctly because it breaks color remapping for multiplayer model portraits.
+        /// but somehow Sven Co-op doesn't interpret that value correctly because it breaks color remapping for multiplayer model portraits.
         /// </summary>
         private static void SetBitmapColorsUsedField(Stream stream, int colorsCount)
         {
