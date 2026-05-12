@@ -1,0 +1,40 @@
+name: "Dotnet package and publish"
+description: "Builds, publishes, zips, and uploads a .NET app"
+inputs:
+  app-name:
+    required: true
+  app-path:
+    required: true
+  project-file:
+    required: true
+  runtime:
+    required: false
+    default: linux-x64
+  shell:
+    required: false
+    default: bash
+runs:
+  using: "composite"
+  steps:
+    - name: Build and publish
+      working-directory: ${{ inputs.app-path }}
+      shell: ${{ inputs.shell }}
+      run: |
+        dotnet build --configuration Release
+        dotnet publish ${{ inputs.project-file }} \
+          -c Release \
+          -o publish/${{ inputs.runtime }} \
+          -r ${{ inputs.runtime }} \
+          --self-contained true \
+          /p:UseAppHost=true \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true
+
+        mv publish/${{ inputs.runtime }}/${{ inputs.app-name }} ./
+        zip ${{ inputs.app-name }}-${{ inputs.runtime }}.zip ${{ inputs.app-name }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.app-name }}-${{ inputs.runtime }}
+        path: ${{ inputs.app-path }}/${{ inputs.app-name }}-${{ inputs.runtime }}.zip
